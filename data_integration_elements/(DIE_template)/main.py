@@ -11,9 +11,9 @@ from utils.load import transfer_file_with_sftp
 
 # **SET THESE** variables to select data source and destination details from congfig.ini
 # Make these script args
-database = "skyward_student"
-driver_file_name = "openedge.jar"
-server = "versatrans"
+database = ""
+driver_file_name = ""
+server = ""
 
 # Variables that define directory structure of DIP
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -41,7 +41,7 @@ logging.basicConfig(
 def main():
     try:
         # EXTRACT (from selected data source into memory)
-        data = extract_data(config, database, query_file_path)
+        data = extract_data(config, database, query_file_path, jar_file_path)
         logging.info(f"Data extracted from {database} database")
 
         # TRANSFORM (data according to selected server specs and persist as file at intermediate_file_path)
