@@ -4,17 +4,17 @@ import logging
 
 def connect_to_db(user, password, conn_string, driver, jar_file_path):
     """
-    Connects to the database using the provided credentials and driver.
+    Connects to the database_name using the provided credentials and driver.
 
     Args:
         user: The database username.
         password: The database password.
         conn_string: The database connection string.
-        driver: The database driver.
-        jar_path: The path to the JAR file (optional).
+        driver: The database driver name.
+        jar_path: The path to the JAR file containing the driver.
 
     Returns:
-        The database connection object.
+        The database_name connection object.
     """
     try:
         return jaydebeapi.connect(driver, conn_string, [user, password], jar_file_path)
@@ -63,9 +63,9 @@ def query_db(db_connection, query):
         raise
 
 
-def extract_data(config, database, query_file_path, jar_file_path):
+def extract_data(config, database_name, query_file_path, jar_file_path):
     """
-    Extracts data from the specified database.
+    Extracts data from the specified database_name.
 
     Args:
         config: The configuration object storing database credentials and connection details.
@@ -76,18 +76,18 @@ def extract_data(config, database, query_file_path, jar_file_path):
         The extracted data (in memory, not file).
     """
     try:
-        db_user = config[database]["user"]
-        db_password = config[database]["password"]
-        db_conn_string = config[database]["conn_string"]
-        db_driver = config[database]["driver"]
+        db_user = config[database_name]["user"]
+        db_password = config[database_name]["password"]
+        db_conn_string = config[database_name]["conn_string"]
+        db_driver = config[database_name]["driver"]
 
         with connect_to_db(
             db_user, db_password, db_conn_string, db_driver, jar_file_path
         ) as db_connection:
-            logging.info(f"Connected to {database} database")
+            logging.info(f"Connected to {database_name} database_name")
             query = load_query(query_file_path)
             data = query_db(db_connection, query)
-            logging.info(f"Data retrieved from {database} database")
+            logging.info(f"Data retrieved from {database_name} database_name")
         return data
     except Exception as e:
         logging.exception(f"An error occurred during data extraction: {e}")

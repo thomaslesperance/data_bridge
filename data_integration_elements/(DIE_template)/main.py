@@ -11,9 +11,9 @@ from utils.load import transfer_file_with_sftp
 
 # **SET THESE** variables to select data source and destination details from congfig.ini
 # Make these script args
-database = ""
+database_name = ""
 driver_file_name = ""
-server = ""
+server_name = ""
 
 # Variables that define directory structure of DIP
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -21,7 +21,7 @@ output_dir = os.path.join(script_dir, "output")
 config_dir = os.path.join(script_dir, "..", "..", "config")
 
 query_file_path = os.path.join(script_dir, "query.sql")
-intermediate_file_path = os.path.join(output_dir, f"{server}.csv")
+intermediate_file_path = os.path.join(output_dir, f"{server_name}.csv")
 log_file_path = os.path.join(output_dir, "output.log")
 config_file_path = os.path.join(config_dir, "config.ini")
 jar_file_path = os.path.join(config_dir, driver_file_name)
@@ -41,17 +41,21 @@ logging.basicConfig(
 def main():
     try:
         # EXTRACT (from selected data source into memory)
-        data = extract_data(config, database, query_file_path, jar_file_path)
-        logging.info(f"Data extracted from {database} database")
+        data = extract_data(config, database_name, query_file_path, jar_file_path)
+        logging.info(f"Data extracted from {database_name} database")
 
         # TRANSFORM (data according to selected server specs and persist as file at intermediate_file_path)
-        tranformed_data_file_path = transform_data(data, server, intermediate_file_path)
-        logging.info(f"Data processed according to {server} specifications")
+        tranformed_data_file_path = transform_data(
+            data, server_name, intermediate_file_path
+        )
+        logging.info(f"Data processed according to {server_name} specifications")
 
         # LOAD (file to selected destination)
-        response = transfer_file_with_sftp(config, server, tranformed_data_file_path)
+        response = transfer_file_with_sftp(
+            config, server_name, tranformed_data_file_path
+        )
         logging.info(
-            f"Secure data transfer to {server} successful\n\nServer response: {response}"
+            f"Secure data transfer to {server_name} successful\n\nServer response: {response}"
         )
 
     ## Catch-all error handling; each phase above has more detailed logging and error handling

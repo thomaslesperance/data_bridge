@@ -1,3 +1,4 @@
 JayDeBeApi==1.2.3
 jpype1==1.5.2
 packaging==24.2
+pytz==2025.1
