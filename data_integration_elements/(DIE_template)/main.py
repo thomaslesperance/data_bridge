@@ -7,7 +7,7 @@ import logging
 sys.path.append(os.path.join(os.path.abspath(__file__), "..", ".."))
 from utils.extract import extract_data
 from utils.transform import transform_data
-from utils.load import transfer_file_with_sftp
+from utils.load import transfer_file_to_file_share
 
 # **SET THESE** variables to select data source and destination details from congfig.ini
 # Make these script args
@@ -51,11 +51,11 @@ def main():
         logging.info(f"Data processed according to {server_name} specifications")
 
         # LOAD (file to selected destination)
-        response = transfer_file_with_sftp(
+        response = transfer_file_to_file_share(
             config, server_name, tranformed_data_file_path
         )
         logging.info(
-            f"Secure data transfer to {server_name} successful\n\nServer response: {response}"
+            f"Secure data transfer to {server_name} successful\n\{server_name} response: {response}"
         )
 
     ## Catch-all error handling; each phase above has more detailed logging and error handling
