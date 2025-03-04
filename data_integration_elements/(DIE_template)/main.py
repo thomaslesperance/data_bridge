@@ -7,13 +7,15 @@ import logging
 sys.path.append(os.path.join(os.path.abspath(__file__), "..", ".."))
 from utils.extract import extract_data
 from utils.transform import transform_data
-from utils.load import transfer_file_to_file_share
+from utils.load import send_email_with_smtp
+
 
 # **SET THESE** variables to select data source and destination details from congfig.ini
 # Make these script args
 database_name = ""
 driver_file_name = ""
 server_name = ""
+email_settings_section = ""
 
 # Variables that define directory structure of DIP
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -45,15 +47,21 @@ def main():
         logging.info(f"Data extracted from {database_name} database")
 
         # TRANSFORM (data according to selected server specs and persist as file at intermediate_file_path)
-        tranformed_data_file_path = transform_data(
+        transformed_data_file_path = transform_data(
             data, server_name, intermediate_file_path
         )
         logging.info(f"Data processed according to {server_name} specifications")
 
         # LOAD (file to selected destination)
-        response = transfer_file_to_file_share(
-            config, server_name, tranformed_data_file_path
+        response = send_email_with_smtp(
+            config=config,
+            smtp_section=server_name,
+            email_section=email_settings_section,
+            subject="",
+            body="",
+            attachments=[transformed_data_file_path],
         )
+
         logging.info(
             f"Secure data transfer to {server_name} successful\n\{server_name} response: {response}"
         )
