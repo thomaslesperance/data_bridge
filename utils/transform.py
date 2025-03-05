@@ -103,8 +103,18 @@ def apply_versatrans_transformations(data, intermediate_file_path):
     return transformed_data_file_path
 
 
+def apply_internal_smtp_transformations(data, intermediate_file_path):
+    (transformed_data_file_path, _) = export_csv_from_tuple_array(
+        data=data, file_name=intermediate_file_path
+    )
+    return transformed_data_file_path
+
+
 def transform_data(data, server_name, intermediate_file_path):
     return server_transformations[server_name](data, intermediate_file_path)
 
 
-server_transformations = {"versatrans": apply_versatrans_transformations}
+server_transformations = {
+    "versatrans": apply_versatrans_transformations,
+    "internal_smtp_server": apply_internal_smtp_transformations,
+}

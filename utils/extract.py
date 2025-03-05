@@ -71,15 +71,33 @@ def extract_data(config, database_name, query_file_path, jar_file_path):
         config: The configuration object storing database credentials and connection details.
         database: The name of the database section in the config.
         query_file_path: The path to the SQL query file.
+        jar_file_path: The path to the JDBC driver JAR file.
 
     Returns:
         The extracted data (in memory, not file).
+
+    Raises:
+        Exception: If there is an error during data extraction.
     """
     try:
-        db_user = config[database_name]["user"]
-        db_password = config[database_name]["password"]
-        db_conn_string = config[database_name]["conn_string"]
-        db_driver = config[database_name]["driver"]
+        db_user = config.get(database_name, "user")
+        db_password = config.get(database_name, "password")
+        db_conn_string = config.get(database_name, "conn_string")
+        db_driver = config.get(database_name, "driver")
+
+        if not all([db_user, db_password, db_conn_string, db_driver]):
+            missing_settings = []
+            if not db_user:
+                missing_settings.append("user")
+            if not db_password:
+                missing_settings.append("password")
+            if not db_conn_string:
+                missing_settings.append("conn_string")
+            if not db_driver:
+                missing_settings.append("driver")
+            raise ValueError(
+                f"Missing required database settings in config.ini: {', '.join(missing_settings)}"
+            )
 
         with connect_to_db(
             db_user, db_password, db_conn_string, db_driver, jar_file_path
@@ -89,6 +107,7 @@ def extract_data(config, database_name, query_file_path, jar_file_path):
             data = query_db(db_connection, query)
             logging.info(f"Data retrieved from {database_name} database_name")
         return data
+
     except Exception as e:
         logging.exception(f"An error occurred during data extraction: {e}")
         raise

@@ -2,39 +2,56 @@ import os
 import sys
 import configparser
 import logging
+from pathlib import Path
 
-# Add the parent directory to sys.path to enable import from locally developed utils
-sys.path.append(os.path.join(os.path.abspath(__file__), "..", ".."))
-from utils.extract import extract_data
-from utils.transform import transform_data
-from utils.load import send_email_with_smtp
-
-
-# **SET THESE** variables to select data source and destination details from congfig.ini
-# Make these script args
+# SET THESE: variables to select data source and destination details from congfig.ini
 database_name = ""
 driver_file_name = ""
 server_name = ""
 email_settings_section = ""
 
-# Variables that define directory structure of DIP
-script_dir = os.path.dirname(os.path.abspath(__file__))
-output_dir = os.path.join(script_dir, "output")
-config_dir = os.path.join(script_dir, "..", "..", "config")
+# data_integration_pipeline/
+#     ├── config/
+#     |   └── config.ini
+#     |   └── driver file (e.g., openedge.jar)
+#     ├── utils/
+#     |   ├── __init__.py
+#     |   ├── extract.py
+#     |   ├── transform.py
+#     |   └── load.py
+#     └── data_integration_elements/
+#         └── DIE_test/
+#             ├── main.py   <-- You are here
+#             ├── query.sql
+#             └── output/
+#                 └── output.log
 
-query_file_path = os.path.join(script_dir, "query.sql")
-intermediate_file_path = os.path.join(output_dir, f"{server_name}.csv")
-log_file_path = os.path.join(output_dir, "output.log")
-config_file_path = os.path.join(config_dir, "config.ini")
-jar_file_path = os.path.join(config_dir, driver_file_name)
+# Add the parent directory to sys.path to enable import from locally developed utils
+project_root = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(project_root))
+
+from utils.extract import extract_data
+from utils.transform import transform_data
+from utils.load import send_email_with_smtp
+
+# Variables that define directory structure of DIP
+script_dir = Path(__file__).resolve().parent
+output_dir = script_dir / "output"
+config_dir = project_root / "config"
+
+query_file_path = script_dir / "query.sql"
+intermediate_file_path = output_dir / f"{server_name}.csv"
+log_file_path = output_dir / "output.log"
+config_file_path = config_dir / "config.ini"
+jar_file_path = config_dir / driver_file_name
 
 # Load configuration file (config.ini)
 config = configparser.ConfigParser()
-config.read(config_file_path)
+config.read(str(config_file_path))
 
 # Configure logging
 logging.basicConfig(
-    filename=log_file_path,
+    filename=str(log_file_path),
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
@@ -43,12 +60,14 @@ logging.basicConfig(
 def main():
     try:
         # EXTRACT (from selected data source into memory)
-        data = extract_data(config, database_name, query_file_path, jar_file_path)
+        data = extract_data(
+            config, database_name, str(query_file_path), str(jar_file_path)
+        )
         logging.info(f"Data extracted from {database_name} database")
 
         # TRANSFORM (data according to selected server specs and persist as file at intermediate_file_path)
         transformed_data_file_path = transform_data(
-            data, server_name, intermediate_file_path
+            data, server_name, str(intermediate_file_path)
         )
         logging.info(f"Data processed according to {server_name} specifications")
 
@@ -59,7 +78,7 @@ def main():
             email_section=email_settings_section,
             subject="",
             body="",
-            attachments=[transformed_data_file_path],
+            attachments=[str(transformed_data_file_path)],
         )
 
         logging.info(
