@@ -56,8 +56,9 @@ def query_db(db_connection, query):
     try:
         with db_connection.cursor() as cursor:
             cursor.execute(query)
+            headers = [col[0] for col in cursor.description]
             cursor_data = cursor.fetchall()
-        return cursor_data
+        return headers, cursor_data
     except Exception as e:
         logging.exception(f"Failed to execute database query: {e}")
         raise
@@ -74,7 +75,7 @@ def extract_data(config, database_name, query_file_path, jar_file_path):
         jar_file_path: The path to the JDBC driver JAR file.
 
     Returns:
-        The extracted data (in memory, not file).
+        A tuple containing the header (list of strings) and the data as a list of tuples.
 
     Raises:
         Exception: If there is an error during data extraction.
@@ -104,9 +105,9 @@ def extract_data(config, database_name, query_file_path, jar_file_path):
         ) as db_connection:
             logging.info(f"Connected to {database_name} database_name")
             query = load_query(query_file_path)
-            data = query_db(db_connection, query)
+            header, data = query_db(db_connection, query)
             logging.info(f"Data retrieved from {database_name} database_name")
-        return data
+        return header, data
 
     except Exception as e:
         logging.exception(f"An error occurred during data extraction: {e}")

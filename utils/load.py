@@ -97,10 +97,13 @@ def send_email_with_smtp(
             logging.info(
                 f"Connecting to SMTP server: {smtp_config['host']}:{smtp_config['port']}"
             )
-            starttls_response = smtp.starttls()
-            if starttls_response[0] != 250:
-                raise Exception(f"STARTTLS failed: {starttls_response}")
-            smtp.login(smtp_config["username"], smtp_config["password"])
+
+            if "security" in smtp_config:
+                starttls_response = smtp.starttls()
+                if starttls_response[0] != 250:
+                    raise Exception(f"STARTTLS failed: {starttls_response}")
+                smtp.login(smtp_config["username"], smtp_config["password"])
+
             sendmail_response = smtp.sendmail(
                 email_config["sender_email"], recipient_emails, msg.as_string()
             )

@@ -29,89 +29,81 @@ def generate_random_filename(
 
 
 def export_csv_from_tuple_array(
-    tuple_array,
-    returned_file_name: str = generate_random_filename(file_extension="csv"),
+    data,
+    returned_file_name,
+    header,
     use_quotes: bool = True,
     no_header_quotes: bool = False,
-    include_header: bool = True,
-    remove_commas: bool = False,
     separator: str = ",",
-) -> tuple:
-    """Exports data from a tuple_array object to a CSV file.
+):
+    """Exports data from a list of tuples to a CSV file.
 
     Args:
-      tuple_array: The tuple_array object returned from querying the database.
-      returned_file_name: The absolute path to the CSV file returned.
-      use_quotes: Whether to enclose data fields in quotes.
-      no_header_quotes: Whether to exclude quotes from header fields.
-      include_header: Whether to include a header row with field names.
-      remove_commas: Whether to remove commas from data fields.
-      separator: The field separator to use in the CSV file.
-    Returns:
-      A tuple containing returned_file_name and the CSV data as a string.
+        data: The list of tuples representing the data.
+        returned_file_name: The absolute path to the CSV file.
+        header: An optional list of strings for the header row.
+        use_quotes: Whether to enclose data fields in quotes.
+        no_header_quotes: Whether to exclude quotes from header fields.
+        separator: The field separator.
 
-    @author: Jeffrey Gordon
-    @modified by: Thomas L'Esperance
+    Returns:
+        The filename of the created CSV file.
     """
 
     csv_data = ""
 
-    if include_header:
-        field_names = [description[0] for description in tuple_array.description]
-        for field_name in field_names:
+    if header:
+        for field_name in header:
             if use_quotes and not no_header_quotes:
-                csv_data += f'"{field_name}"'
+                csv_data += f'"{field_name}"{separator}'
             else:
-                csv_data += str(field_name)
-            csv_data += separator
-        csv_data = csv_data[:-1]  # Remove trailing separator
-        csv_data += "\r\n"
+                csv_data += f"{field_name}{separator}"
+        csv_data = csv_data[:-1] + "\r\n"  # Remove trailing separator, add newline
 
-    row = tuple_array.fetchone()
-    while row:
+    for row in data:
         for col in row:
             formatted_data = str(col).replace("\n", "").strip() if col else ""
-            if remove_commas:
-                formatted_data = formatted_data.replace(separator, "")
             if use_quotes:
-                csv_data += f'"{formatted_data}"'
+                csv_data += f'"{formatted_data}"{separator}'
             else:
-                csv_data += formatted_data
-            csv_data += separator
-
-        csv_data = csv_data[:-1]  # Remove trailing separator
-        csv_data += "\r\n"
-        row = tuple_array.fetchone()
+                csv_data += f"{formatted_data}{separator}"
+        csv_data = csv_data[:-1] + "\r\n"  # Remove trailing separator, add newline
 
     csv_data = csv_data.strip()
 
     dir_name = os.path.dirname(returned_file_name)
-
     if dir_name and not os.path.exists(dir_name):
         os.makedirs(dir_name)
 
     with open(returned_file_name, "w") as file:
-        print(csv_data, file=file)
+        file.write(csv_data)  # Use file.write for efficiency
 
-    return returned_file_name, csv_data
+    return returned_file_name
 
 
-def apply_versatrans_transformations(data, intermediate_file_path):
-    (transformed_data_file_path, _) = export_csv_from_tuple_array(
-        data=data, file_name=intermediate_file_path
+def apply_versatrans_transformations(header, data_rows, intermediate_file_path):
+    transformed_data_file_path = export_csv_from_tuple_array(
+        data=data_rows,
+        returned_file_name=intermediate_file_path,
+        header=header,
     )
     return transformed_data_file_path
 
 
-def apply_internal_smtp_transformations(data, intermediate_file_path):
-    (transformed_data_file_path, _) = export_csv_from_tuple_array(
-        data=data, file_name=intermediate_file_path
+def apply_internal_smtp_transformations(header, data_rows, intermediate_file_path):
+    transformed_data_file_path = export_csv_from_tuple_array(
+        data=data_rows,
+        returned_file_name=intermediate_file_path,
+        header=header,
     )
     return transformed_data_file_path
 
 
 def transform_data(data, server_name, intermediate_file_path):
-    return server_transformations[server_name](data, intermediate_file_path)
+    header, data_rows = data
+    return server_transformations[server_name](
+        header, data_rows, intermediate_file_path
+    )
 
 
 server_transformations = {
