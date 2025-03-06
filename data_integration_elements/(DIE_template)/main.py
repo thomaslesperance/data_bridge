@@ -35,17 +35,21 @@ def main():
     try:
         # | --- Extract ---
         header, data = extract_data(job_config, paths["query_file_path"])
-        logging.info(f"Data extracted from {job_config['source']['name']} database.")
+        logging.info(
+            f"SUCCESS: Data extracted from {job_config['source']['name']} database."
+        )
 
         # | --- Transform ---
         transformed_data_file_path = transform_data(
             job_config, (header, data), str(intermediate_file_path)
         )
-        logging.info(f"Data transformed and saved to {transformed_data_file_path}")
+        logging.info(
+            f"SUCCESS: Data transformed and saved to {transformed_data_file_path}"
+        )
 
         # | --- Load ---
         response = load_data(job_config, str(transformed_data_file_path))
-        logging.info(f"Data transfer completed.\n\nResponse: {response}.")
+        logging.info(f"SUCCESS: Data loaded.\n\nDestination response: {response}.")
 
     except Exception as e:
         logging.exception(f"An error occurred in job {job_name}: {e}")
