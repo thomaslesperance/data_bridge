@@ -10,7 +10,7 @@ def connect_to_db(user, password, conn_string, driver, jar_file_path):
         user: The database username.
         password: The database password.
         conn_string: The database connection string.
-        driver: The database driver name.
+        driver: The database driver name string.
         jar_path: The path to the JAR file containing the driver.
 
     Returns:

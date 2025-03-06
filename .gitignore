@@ -6,3 +6,4 @@ config.ini
 data_integration_elements/DIE_*/
 test/
 venv/
+.DS_STORE
