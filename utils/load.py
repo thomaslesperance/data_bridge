@@ -7,7 +7,7 @@ import logging
 import os
 
 
-# Double check security of this function in Python docs before using in prod
+# TO DO: Double check security of this function in Python docs before using in prod
 def send_email_with_smtp(
     config,
     smtp_section,

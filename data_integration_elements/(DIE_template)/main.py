@@ -4,7 +4,7 @@ import configparser
 import logging
 from pathlib import Path
 
-# SET THESE: variables to select data source and destination details from congfig.ini
+# SET THESE variables to select data source and destination details from congfig.ini
 database_name = ""
 driver_file_name = ""
 server_name = ""
@@ -40,7 +40,9 @@ output_dir = script_dir / "output"
 config_dir = project_root / "config"
 
 query_file_path = script_dir / "query.sql"
-intermediate_file_path = output_dir / f"{server_name}.csv"
+intermediate_file_path = (
+    output_dir / f"{server_name}.csv"
+)  # TO DO: prioritize naming file with value in email_settings_section if available
 log_file_path = output_dir / "output.log"
 config_file_path = config_dir / "config.ini"
 jar_file_path = config_dir / driver_file_name
@@ -60,14 +62,14 @@ logging.basicConfig(
 def main():
     try:
         # EXTRACT (from selected data source into memory)
-        data = extract_data(
+        header, data = extract_data(
             config, database_name, str(query_file_path), str(jar_file_path)
         )
         logging.info(f"Data extracted from {database_name} database")
 
         # TRANSFORM (data according to selected server specs and persist as file at intermediate_file_path)
         transformed_data_file_path = transform_data(
-            data, server_name, str(intermediate_file_path)
+            (header, data), server_name, str(intermediate_file_path)
         )
         logging.info(f"Data processed according to {server_name} specifications")
 
