@@ -109,7 +109,9 @@ def extract_data(
     """
     try:
         with connect_to_db(job_config) as db_connection:
-            logging.info(f"Connected to {job_config['source']['name']} database.")
+            logging.info(
+                f"Connected to {job_config['source']['source_name']} database."
+            )
             query = load_query(query_file_path)
             header, data = query_db(db_connection, query)
             logging.info(f"Data retrieved from database")

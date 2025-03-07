@@ -49,6 +49,7 @@ def get_job_config(config: configparser.ConfigParser, job_name: str) -> dict:
     """
     try:
         job_config = dict(config[job_name])
+        job_config["job_name"] = job_name
     except KeyError:
         logging.exception(f"Job '{job_name}' not found in config.")
         raise
@@ -59,7 +60,7 @@ def get_job_config(config: configparser.ConfigParser, job_name: str) -> dict:
 
     try:
         source_config = dict(config[source_name])
-        source_config["name"] = source_name
+        source_config["source_name"] = source_name
     except KeyError:
         logging.exception(
             f"Source config '{source_name}' not found for job '{job_name}'."
@@ -79,6 +80,7 @@ def get_job_config(config: configparser.ConfigParser, job_name: str) -> dict:
             )
         try:
             service_config = dict(config[service_name])
+            service_config["service_name"] = service_name
         except KeyError:
             logging.exception(
                 f"Shared service '{service_name}' config not found for job '{job_name}'."

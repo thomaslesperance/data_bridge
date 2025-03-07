@@ -80,6 +80,7 @@ def example_job_transformations(
 # --- Dictionary for transformations beyond simple CSV export function ---
 special_transformations: Dict[str, TransformFunction] = {
     "example_job": example_job_transformations,
+    "test_email": example_job_transformations,
     # Add more job_name: function mappings here as needed
 }
 

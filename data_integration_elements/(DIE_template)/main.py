@@ -36,7 +36,7 @@ def main():
         # | --- Extract ---
         header, data = extract_data(job_config, paths["query_file_path"])
         logging.info(
-            f"SUCCESS: Data extracted from {job_config['source']['name']} database."
+            f"SUCCESS: Data extracted from {job_config['source']['source_name']} database."
         )
 
         # | --- Transform ---
