@@ -26,7 +26,7 @@ def main():
         sys.exit(1)
 
     config = load_config(paths["config_file_path"])
-    job_config = get_job_config(config, job_name)
+    job_config = get_job_config(config, job_name, paths["config_dir"])
 
     Path(paths["output_dir"]).mkdir(parents=True, exist_ok=True)
     configure_logging(paths["log_file_path"])
@@ -52,7 +52,7 @@ def main():
 
         # | --- Load ---
         response = load_data(job_config, str(transformed_data_file_path))
-        logging.info(f"SUCCESS: Data loaded.\n\nDestination response: {response}.")
+        logging.info(f"SUCCESS: Data loaded.\n\nDestination response: {response}")
 
     except Exception as e:
         logging.exception(f"An error occurred in job {job_name}: {e}")

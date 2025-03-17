@@ -30,7 +30,9 @@ def load_config(config_file_path: str | Path) -> configparser.ConfigParser:
     return config
 
 
-def get_job_config(config: configparser.ConfigParser, job_name: str) -> dict:
+def get_job_config(
+    config: configparser.ConfigParser, job_name: str, config_dir: str | Path
+) -> dict:
     """
     Retrieves configuration for a specific job, creating a nested dictionary.
 
@@ -47,6 +49,7 @@ def get_job_config(config: configparser.ConfigParser, job_name: str) -> dict:
         KeyError: If the job section, source, or destination is not found.
         ValueError: If required keys are missing.
     """
+    # | --- Assemble job_congig dict ---
     try:
         job_config = dict(config[job_name])
         job_config["job_name"] = job_name
@@ -54,6 +57,7 @@ def get_job_config(config: configparser.ConfigParser, job_name: str) -> dict:
         logging.exception(f"Job '{job_name}' not found in config.")
         raise
 
+    # | --- Assemble source_config dict ---
     source_name = job_config.get("source")
     if not source_name:
         raise ValueError(f"Job '{job_name}' must specify 'source'.")
@@ -61,12 +65,15 @@ def get_job_config(config: configparser.ConfigParser, job_name: str) -> dict:
     try:
         source_config = dict(config[source_name])
         source_config["source_name"] = source_name
+        driver_file_path = Path(config_dir) / source_config["driver_file"]
+        source_config["driver_file"] = str(driver_file_path)
     except KeyError:
         logging.exception(
             f"Source config '{source_name}' not found for job '{job_name}'."
         )
         raise
 
+    # | --- Assemble service_config dict ---
     destination_type = job_config.get("destination_type")
     if not destination_type:
         raise ValueError(f"Job '{job_name}' must specify 'destination_type'.")
@@ -87,9 +94,10 @@ def get_job_config(config: configparser.ConfigParser, job_name: str) -> dict:
             )
             raise
     else:
-        # Job-specific service and destination
+        # It's has job-specific service and destination
         pass
 
+    # | --- Assemble final_config dict ---
     final_config = {
         "source": source_config,
         "service": service_config,

@@ -110,10 +110,17 @@ def send_email_with_smtp(job_config: Dict[str, Any], msg: MIMEMultipart) -> str:
             if "user" in smtp_config and "password" in smtp_config:
                 smtp.login(smtp_config.get("user"), smtp_config.get("password"))
 
+            sender = msg["From"]
+            recipients = msg["To"].split(",")
+            msg_as_string = msg.as_string()
+            logging.info(
+                f"Sending email to these recipients from {sender}: {recipients}"
+            )
+
             sendmail_response = smtp.sendmail(
-                msg["From"],
-                msg["To"].split(","),
-                msg.as_string(),
+                sender,
+                recipients,
+                msg_as_string,
             )
 
             if sendmail_response:
