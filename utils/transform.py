@@ -1,88 +1,75 @@
 import os
-import random
-import string
-from datetime import datetime
-import pytz
+import csv
+import logging
+from typing import List, Tuple, Dict, Callable, Any
+
+# Type alias for data (header + rows)
+Data = Tuple[List[str], List[Tuple[Any, ...]]]
+
+# Type alias for transformation functions
+TransformFunction = Callable[[List[str], List[Tuple[Any, ...]], str], str]
 
 
-def generate_random_filename(
-    length: int = 12, file_extension: str = "txt", prefix="WFISD"
-) -> str:
-    """Generates a random filename with the specified length,
-    prepended by the current date.
-
-    Args:
-      length: The desired length of the random part of the filename.
-      file_extension: The file extension (without the dot).
-
-    Returns:
-      The generated random filename.
-    """
-    characters = string.ascii_letters + string.digits
-    random_string = "".join(random.choice(characters) for _ in range(length))
-
-    # Get current date in Central Time
-    tz = pytz.timezone("US/Central")
-    current_date = datetime.now(tz).strftime("%Y%m%d")
-
-    return f"{prefix}_{current_date}_{random_string}.{file_extension}"
-
-
-def export_csv_from_tuple_array(
-    data,
-    returned_file_name,
-    header,
+def export_csv_from_data(
+    data: List[Tuple[Any, ...]],
+    returned_file_name: str,
+    header: List[str],
     use_quotes: bool = True,
-    no_header_quotes: bool = False,
-    separator: str = ",",
-):
-    """Exports data from a list of tuples to a CSV file.
+) -> str:
+    """
+    Exports data to a CSV file.
 
     Args:
-        data: The list of tuples representing the data.
-        returned_file_name: The absolute path to the CSV file.
-        header: An optional list of strings for the header row.
-        use_quotes: Whether to enclose data fields in quotes.
-        no_header_quotes: Whether to exclude quotes from header fields.
-        separator: The field separator.
+        data: A list of tuples, where each tuple represents a row.
+        returned_file_name: The path to the output CSV file (str).
+        header: A list of strings representing the column headers.
+        use_quotes: Whether to enclose fields in double quotes (default: True).
 
     Returns:
-        The filename of the created CSV file.
+        The path to the created CSV file (str).
+
+    Raises:
+        Exception: If any error occurs during CSV creation.
     """
+    try:
+        # Ensure the directory exists
+        dir_name = os.path.dirname(returned_file_name)
+        if dir_name and not os.path.exists(dir_name):
+            os.makedirs(dir_name)
 
-    csv_data = ""
+        with open(returned_file_name, "w", newline="", encoding="utf-8") as csvfile:
+            writer = csv.writer(
+                csvfile, quoting=csv.QUOTE_ALL if use_quotes else csv.QUOTE_NONE
+            )
+            if header:
+                writer.writerow(header)
+            writer.writerows(data)
 
-    if header:
-        for field_name in header:
-            if use_quotes and not no_header_quotes:
-                csv_data += f'"{field_name}"{separator}'
-            else:
-                csv_data += f"{field_name}{separator}"
-        csv_data = csv_data[:-1] + "\r\n"  # Remove trailing separator, add newline
+        logging.info(f"CSV file created: {returned_file_name}")
+        return returned_file_name
 
-    for row in data:
-        for col in row:
-            formatted_data = str(col).replace("\n", "").strip() if col else ""
-            if use_quotes:
-                csv_data += f'"{formatted_data}"{separator}'
-            else:
-                csv_data += f"{formatted_data}{separator}"
-        csv_data = csv_data[:-1] + "\r\n"  # Remove trailing separator, add newline
-
-    csv_data = csv_data.strip()
-
-    dir_name = os.path.dirname(returned_file_name)
-    if dir_name and not os.path.exists(dir_name):
-        os.makedirs(dir_name)
-
-    with open(returned_file_name, "w") as file:
-        file.write(csv_data)  # Use file.write for efficiency
-
-    return returned_file_name
+    except Exception as e:
+        logging.exception(f"Error exporting data to CSV: {e}")
+        raise
 
 
-def apply_versatrans_transformations(header, data_rows, intermediate_file_path):
-    transformed_data_file_path = export_csv_from_tuple_array(
+def example_job_transformations(
+    header: List[str], data_rows: List[Tuple[Any, ...]], intermediate_file_path: str
+) -> str:
+    """Example custom transform: Simply exports to CSV (no actual transformation).
+
+    Args:
+        header: Column headers.
+        data_rows: The data rows.
+        intermediate_file_path: Path to save the transformed data.
+
+    Returns:
+        Path to the transformed data file.
+    """
+    # In a real-world scenario, you would modify data_rows here
+    # before exporting to CSV.  This is just a placeholder.
+    logging.info("Applying example_job transformations (placeholder)")
+    transformed_data_file_path = export_csv_from_data(
         data=data_rows,
         returned_file_name=intermediate_file_path,
         header=header,
@@ -90,23 +77,52 @@ def apply_versatrans_transformations(header, data_rows, intermediate_file_path):
     return transformed_data_file_path
 
 
-def apply_internal_smtp_transformations(header, data_rows, intermediate_file_path):
-    transformed_data_file_path = export_csv_from_tuple_array(
-        data=data_rows,
-        returned_file_name=intermediate_file_path,
-        header=header,
-    )
-    return transformed_data_file_path
-
-
-def transform_data(data, server_name, intermediate_file_path):
-    header, data_rows = data
-    return server_transformations[server_name](
-        header, data_rows, intermediate_file_path
-    )
-
-
-server_transformations = {
-    "versatrans": apply_versatrans_transformations,
-    "internal_smtp_server": apply_internal_smtp_transformations,
+# --- Dictionary for transformations beyond simple CSV export function ---
+special_transformations: Dict[str, TransformFunction] = {
+    "example_job": example_job_transformations,
+    "test_email": example_job_transformations,
+    # Add more job_name: function mappings here as needed
 }
+
+
+def transform_data(
+    job_config: Dict[str, Any], data: Data, intermediate_file_path: str
+) -> str:
+    """
+    Transforms data based on the job configuration.
+
+    If the job_name is a key in `special_transformations`, the corresponding
+    function is called.  Otherwise, the data is exported to CSV with no changes.
+
+    Args:
+        job_config: The nested job configuration dictionary.
+        data: A tuple containing the header (list of strings) and data rows
+              (list of tuples).
+        intermediate_file_path: The path to save the transformed data.
+
+    Returns:
+        The path to the transformed data file.
+
+    Raises:
+        Exception: If any error occurs during transformation.
+    """
+    header, data_rows = data
+    job_name = job_config["job"].get("job_name")
+
+    try:
+        if job_name in special_transformations:
+            logging.info(f"Applying custom transformation for job: {job_name}")
+            transform_function = special_transformations[job_name]
+            return transform_function(header, data_rows, intermediate_file_path)
+        else:
+            logging.info(
+                f"No specific transformation found for job: {job_name}. Performing default CSV export."
+            )
+            return export_csv_from_data(
+                data=data_rows,
+                returned_file_name=intermediate_file_path,
+                header=header,
+            )
+    except Exception as e:
+        logging.exception(f"Error during data transformation: {e}")
+        raise

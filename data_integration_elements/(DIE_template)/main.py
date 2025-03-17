@@ -1,94 +1,61 @@
-import sys
-import configparser
-import logging
 from pathlib import Path
+import sys
+import logging
 
-# SET THESE variables to select data source and destination details from congfig.ini
-database_name = ""
-driver_file_name = ""
-server_name = ""
-email_settings_section = ""
-
-# data_integration_pipeline/
-#     ├── config/
-#     |   └── config.ini
-#     |   └── driver file (e.g., openedge.jar)
-#     ├── utils/
-#     |   ├── __init__.py
-#     |   ├── extract.py
-#     |   ├── transform.py
-#     |   └── load.py
-#     └── data_integration_elements/
-#         └── DIE_test/
-#             ├── main.py   <-- You are here
-#             ├── query.sql
-#             └── output/
-#                 └── output.log
-
-# Add the parent directory to sys.path to enable import from locally developed utils
 project_root = Path(__file__).resolve().parent.parent.parent
-sys.path.append(str(project_root))
+sys.path.insert(0, str(project_root))
 
 from utils.extract import extract_data
 from utils.transform import transform_data
-from utils.load import send_email_with_smtp
-
-# Variables that define directory structure of DIP
-script_dir = Path(__file__).resolve().parent
-output_dir = script_dir / "output"
-config_dir = project_root / "config"
-
-query_file_path = script_dir / "query.sql"
-intermediate_file_path = (
-    output_dir / f"{server_name}.csv"
-)  # TO DO: prioritize naming file with value in email_settings_section if available
-log_file_path = output_dir / "output.log"
-config_file_path = config_dir / "config.ini"
-jar_file_path = config_dir / driver_file_name
-
-# Load configuration file (config.ini)
-config = configparser.ConfigParser()
-config.read(str(config_file_path))
-
-# Configure logging
-logging.basicConfig(
-    filename=str(log_file_path),
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
+from utils.load import load_data
+from utils.config import (
+    load_config,
+    get_job_config,
+    determine_output_filename,
+    configure_logging,
+    locate,
 )
 
 
 def main():
+    # | --- Initialize ---
+    job_name = Path(__file__).resolve().parent.name.replace("DIE_", "")
+    paths = locate(job_name)
+    if not all(paths.values()):
+        print("Error")
+        sys.exit(1)
+
+    config = load_config(paths["config_file_path"])
+    job_config = get_job_config(config, job_name, paths["config_dir"])
+
+    Path(paths["output_dir"]).mkdir(parents=True, exist_ok=True)
+    configure_logging(paths["log_file_path"])
+    logging.info(f"Starting data integration for job: {job_name}")
+
+    intermediate_filename = determine_output_filename(job_config, job_name)
+    intermediate_file_path = Path(paths["output_dir"]) / intermediate_filename
+
     try:
-        # EXTRACT (from selected data source into memory)
-        header, data = extract_data(
-            config, database_name, str(query_file_path), str(jar_file_path)
-        )
-        logging.info(f"Data extracted from {database_name} database")
-
-        # TRANSFORM (data according to selected server specs and persist as file at intermediate_file_path)
-        transformed_data_file_path = transform_data(
-            (header, data), server_name, str(intermediate_file_path)
-        )
-        logging.info(f"Data processed according to {server_name} specifications")
-
-        # LOAD (file to selected destination)
-        response = send_email_with_smtp(
-            config=config,
-            smtp_section=server_name,
-            email_section=email_settings_section,
-            subject="",
-            body="",
-            attachments=[str(transformed_data_file_path)],
-        )
-
+        # | --- Extract ---
+        header, data = extract_data(job_config, paths["query_file_path"])
         logging.info(
-            f"Secure data transfer to {server_name} successful\n\{server_name} response: {response}"
+            f"SUCCESS: Data extracted from {job_config['source']['source_name']} database."
         )
 
-    ## Catch-all error handling; each phase above has more detailed logging and error handling
+        # | --- Transform ---
+        transformed_data_file_path = transform_data(
+            job_config, (header, data), str(intermediate_file_path)
+        )
+        logging.info(
+            f"SUCCESS: Data transformed and saved to {transformed_data_file_path}"
+        )
+
+        # | --- Load ---
+        response = load_data(job_config, str(transformed_data_file_path))
+        logging.info(f"SUCCESS: Data loaded.\n\nDestination response: {response}")
+
     except Exception as e:
-        logging.exception(f"'Catch-all'...An error occurred: {e}")
+        logging.exception(f"An error occurred in job {job_name}: {e}")
 
 
 if __name__ == "__main__":
