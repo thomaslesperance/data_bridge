@@ -128,20 +128,6 @@ def determine_output_filename(job_config: dict, job_name: str) -> str:
         raise
 
 
-def configure_logging(log_file_path: str | Path):
-    """
-    Configures the logging system.
-
-    Args:
-        log_file_path:  The path to the log file.
-    """
-    logging.basicConfig(
-        filename=str(log_file_path),
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-    )
-
-
 def locate(job_name: str) -> dict:
     """
     Calculates and returns necessary file/directory paths.

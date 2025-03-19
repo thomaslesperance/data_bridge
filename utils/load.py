@@ -5,19 +5,24 @@ from email.mime.text import MIMEText
 from email.utils import COMMASPACE, formatdate
 import logging
 import os
-from typing import Dict, Callable, Any
-from utils.message_builders import build_message
+from typing import Dict, Callable, Any, Tuple
 
-# Type alias for load functions
-LoadFunction = Callable[[Dict[str, Any], str], str]
+# Type alias for message builder functions.
+MessageBuilderFunction = Callable[[Dict[str, Any], str], Tuple[str, str]]
+
+# Type alias for load functions.
+LoadFunction = Callable[[Dict[str, Any], str, MessageBuilderFunction], str]
 
 
-def prepare_email(job_config: Dict[str, Any], file_path: str) -> MIMEMultipart:
-    """Prepares the email message (subject, body, attachments).
+def prepare_email(
+    job_config: Dict[str, Any], file_path: str, message_builder: MessageBuilderFunction
+) -> MIMEMultipart:
+    """Prepares the email message, including building the subject/body.
 
     Args:
         job_config: The nested job configuration.
-        file_path:  Path to the file to attach.
+        file_path: Path to the intermediate file to attach.
+        message_builder: The custom message builder function defined in DIE main.py.
 
     Returns:
         A MIMEMultipart object representing the complete email message.
@@ -25,11 +30,15 @@ def prepare_email(job_config: Dict[str, Any], file_path: str) -> MIMEMultipart:
     Raises:
         ValueError: If required config keys are missing.
         FileNotFoundError: If the attachment file doesn't exist.
+        Exception: If the message builder function fails.
     """
-    email_config = job_config["job"]
+    if job_config["job"].get("destination_type") == "shared_service":
+        email_config = job_config["job"]
+    else:  # job-specific smtp destination
+        email_config = job_config["job"]
 
+    # Check if needed keys are present and create and validate recipient list
     required_email_keys = ["recipients", "sender_email"]
-
     if not all(email_config.get(key) for key in required_email_keys):
         missing_keys = [key for key in required_email_keys if not email_config.get(key)]
         raise ValueError(f"Missing required email keys: {missing_keys}")
@@ -40,8 +49,12 @@ def prepare_email(job_config: Dict[str, Any], file_path: str) -> MIMEMultipart:
     if not all(isinstance(email, str) for email in recipient_emails):
         raise TypeError("recipient_emails must be a list of strings.")
 
-    # Create job-specific email message text
-    subject, body = build_message(job_config, file_path)
+    # --- Build the message (subject and body) using the provided builder from main.py---
+    try:
+        subject, body = message_builder(job_config, file_path)
+    except Exception as e:
+        logging.exception(f"Error in message builder function: {e}")
+        raise
 
     msg = MIMEMultipart()
     msg["From"] = email_config.get("sender_email")
@@ -62,30 +75,41 @@ def prepare_email(job_config: Dict[str, Any], file_path: str) -> MIMEMultipart:
     return msg
 
 
-def send_email_with_smtp(job_config: Dict[str, Any], msg: MIMEMultipart) -> str:
-    """Sends a pre-constructed email via SMTP.
+def send_email_with_smtp(
+    job_config: Dict[str, Any],
+    file_path: str,
+    *,
+    message_builder: MessageBuilderFunction = None,
+) -> str:
+    """Sends data via email using SMTP.  Prepares and sends the email.
 
     Args:
         job_config: The nested job configuration dictionary.
-        msg: The MIMEMultipart email message to send.
+        file_path: Path to the file to attach.
+        message_builder:  Custom function to build the email message.
 
     Returns:
-        A string indicating the result of the email sending.
+        A string indicating the result of the email sending operation.
 
     Raises:
-        ValueError: If required config keys are missing.
+        ValueError: If required config keys are missing, or no message builder.
         smtplib.SMTPException: If an SMTP error occurs.
+        FileNotFoundError: If the attachment file doesn't exist.
     """
     try:
         if job_config["job"].get("destination_type") == "shared_service":
             smtp_config = job_config["service"]
+            email_config = job_config["job"]
         else:  # job-specific smtp destination
             smtp_config = job_config["job"]  # All SMTP settings are here
+            email_config = job_config["job"]
 
+        # Validate existence of required keys
         required_smtp_keys = [
             "host",
             "port",
         ]  # user and password might not always be required
+        required_email_keys = ["recipients", "sender_email"]
 
         if not all(smtp_config.get(key) for key in required_smtp_keys):
             missing_keys = [
@@ -93,34 +117,37 @@ def send_email_with_smtp(job_config: Dict[str, Any], msg: MIMEMultipart) -> str:
             ]
             raise ValueError(f"Missing required SMTP keys: {missing_keys}")
 
+        if not all(email_config.get(key) for key in required_email_keys):
+            missing_keys = [
+                key for key in required_email_keys if not email_config.get(key)
+            ]
+            raise ValueError(f"Missing required email keys: {missing_keys}")
+
+        # --- Prepare the email message ---
+        if message_builder is None:  # Raise error if message_builder is None
+            raise ValueError(
+                "A 'message_builder' function must be provided for SMTP jobs."
+            )
+        msg = prepare_email(job_config, file_path, message_builder)
+
+        # --- Connect and Send ---
         with smtplib.SMTP(
             host=smtp_config.get("host"), port=int(smtp_config.get("port"))
         ) as smtp:
             logging.info(
-                f"Connecting to SMTP server: {smtp_config.get('host')}:{smtp_config.get('port')}"
+                f"Connecting to SMTP server (no encryption): {smtp_config.get('host')}:{smtp_config.get('port')}"
             )
-
-            if "security" in smtp_config:
-                if smtp_config.get("security") == "starttls":
-                    starttls_response = smtp.starttls()
-                    if starttls_response[0] != 250:
-                        raise Exception(f"STARTTLS failed: {starttls_response}")
-                # Consider other security options here with an if/else
 
             if "user" in smtp_config and "password" in smtp_config:
                 smtp.login(smtp_config.get("user"), smtp_config.get("password"))
 
-            sender = msg["From"]
-            recipients = msg["To"].split(",")
-            msg_as_string = msg.as_string()
-            logging.info(
-                f"Sending email to these recipients from {sender}: {recipients}"
-            )
+            logging.info(f"Sending email from: {msg['From']}")
+            logging.info(f"Sending email to  : {msg['To']}")
 
             sendmail_response = smtp.sendmail(
-                sender,
-                recipients,
-                msg_as_string,
+                msg["From"],
+                msg["To"].split(","),  # Correct: split into a list
+                msg.as_string(),
             )
 
             if sendmail_response:
@@ -135,6 +162,9 @@ def send_email_with_smtp(job_config: Dict[str, Any], msg: MIMEMultipart) -> str:
     except smtplib.SMTPException as e:
         logging.exception(f"SMTP Error: {e}")
         raise
+    except FileNotFoundError:
+        logging.exception("Attachment file not found.")
+        raise
     except Exception as e:
         logging.exception(f"An unexpected error occurred: {e}")
         raise
@@ -144,20 +174,24 @@ def send_email_with_smtp(job_config: Dict[str, Any], msg: MIMEMultipart) -> str:
 load_functions: Dict[str, LoadFunction] = {
     "smtp": send_email_with_smtp,
     # "sftp": transfer_file_with_sftp,
-    # Add more load functions here
+    # Add more load functions here for other data transfer methods
 }
 
 
-def load_data(job_config: Dict[str, Any], file_path: str) -> str:
-    """
-    Performs the load operation based on the job configuration.
+def load_data(
+    job_config: Dict[str, Any],
+    file_path: str,
+    message_builder: MessageBuilderFunction = None,
+) -> str:
+    """Performs the load operation, looking up the correct function in load_functions.
 
     Args:
         job_config: The nested job configuration dictionary.
         file_path: The path to the file to be loaded.
+        message_builder: Optional custom message builder function for email defined in DIE main.py.
 
     Returns:
-        A string indicating the result message of the load operation.
+        A string indicating the result of the load operation.
 
     Raises:
         ValueError: If no load function is found for the destination type.
@@ -172,17 +206,21 @@ def load_data(job_config: Dict[str, Any], file_path: str) -> str:
 
         if service_type in load_functions:
             load_function = load_functions[service_type]
+            # Call the load function, passing the message_builder if needed.
             if service_type == "smtp":
-                msg = prepare_email(job_config, file_path)
-                result = load_function(job_config, msg)
-                return result
+                result = load_function(
+                    job_config, file_path, message_builder=message_builder
+                )
             else:
-                result = load_function(job_config, file_path)
-                return result
+                result = load_function(
+                    job_config, file_path, message_builder=message_builder
+                )  # Still need to pass for consistency of load_functions
+            return result
         else:
             raise ValueError(
                 f"No load function found for destination type: {service_type}"
             )
+
     except Exception as e:
         logging.exception(f"An error occurred during the load operation: {e}")
         raise

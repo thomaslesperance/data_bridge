@@ -2,7 +2,6 @@ config.ini
 *.jar
 **/__pycache__/
 *.csv
-*.log
 data_integration_elements/DIE_*/
 test/
 venv/
