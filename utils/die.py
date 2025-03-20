@@ -95,5 +95,6 @@ class DIE:
             logging.info(f"Data transfer completed. Response: {response}")
 
         except Exception as e:
-            logging.exception(f"An error occurred in job {self.job_name}: {e}")
-            raise
+            logging.exception(
+                f"An error occurred in data integration for job: {self.job_name}\n\n{e}"
+            )

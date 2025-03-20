@@ -24,9 +24,10 @@ def load_config(config_file_path: str | Path) -> configparser.ConfigParser:
             raise FileNotFoundError(
                 f"Config file not found or empty: {config_file_path}"
             )
-    except (FileNotFoundError, configparser.Error) as e:
-        logging.exception(f"Error loading config file: {e}")
-        raise
+    except FileNotFoundError as e:
+        raise FileNotFoundError(f"Error loading config file: {e}")
+    except configparser.Error as e:
+        raise configparser.Error(f"Error loading config file: {e}")
     return config
 
 
@@ -54,8 +55,7 @@ def get_job_config(
         job_config = dict(config[job_name])
         job_config["job_name"] = job_name
     except KeyError:
-        logging.exception(f"Job '{job_name}' not found in config.")
-        raise
+        raise KeyError(f"Job '{job_name}' not found in config.")
 
     # | --- Assemble source_config dict ---
     source_name = job_config.get("source")
@@ -68,10 +68,7 @@ def get_job_config(
         driver_file_path = Path(config_dir) / source_config["driver_file"]
         source_config["driver_file"] = str(driver_file_path)
     except KeyError:
-        logging.exception(
-            f"Source config '{source_name}' not found for job '{job_name}'."
-        )
-        raise
+        raise KeyError(f"Source config '{source_name}' not found for job '{job_name}'.")
 
     # | --- Assemble service_config dict ---
     destination_type = job_config.get("destination_type")
@@ -89,10 +86,9 @@ def get_job_config(
             service_config = dict(config[service_name])
             service_config["service_name"] = service_name
         except KeyError:
-            logging.exception(
+            raise KeyError(
                 f"Shared service '{service_name}' config not found for job '{job_name}'."
             )
-            raise
     else:
         # It's has job-specific service and destination
         pass
@@ -124,8 +120,7 @@ def determine_output_filename(job_config: dict, job_name: str) -> str:
         )  # Access base_filename from nested 'job' dict
         return f"{base_filename}.csv"
     except Exception as e:
-        logging.exception(f"Error determining output filename: {e}")
-        raise
+        raise Exception(f"Error determining output filename: {e}")
 
 
 def locate(job_name: str) -> dict:
@@ -159,13 +154,14 @@ def locate(job_name: str) -> dict:
             "config_file_path": str(config_file_path),
         }
     except Exception as e:
-        logging.exception(f"Error determining paths: {e}")
-        return {
-            "project_root": None,
-            "script_dir": None,
-            "output_dir": None,
-            "config_dir": None,
-            "query_file_path": None,
-            "log_file_path": None,
-            "config_file_path": None,
-        }
+        raise Exception(f"Error determining paths: {e}")
+        # logging.exception(f"Error determining paths: {e}")
+        # return {
+        #     "project_root": None,
+        #     "script_dir": None,
+        #     "output_dir": None,
+        #     "config_dir": None,
+        #     "query_file_path": None,
+        #     "log_file_path": None,
+        #     "config_file_path": None,
+        # }

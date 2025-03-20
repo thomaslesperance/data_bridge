@@ -29,6 +29,7 @@ def prepare_email(
 
     Raises:
         ValueError: If required config keys are missing.
+        TypeError: If recipient emails aren't in a list of strings.
         FileNotFoundError: If the attachment file doesn't exist.
     """
     if job_config["job"].get("destination_type") == "shared_service":
@@ -52,8 +53,7 @@ def prepare_email(
     try:
         subject, body = message_builder(job_config, file_path)
     except Exception as e:
-        logging.exception(f"Error in message builder function: {e}")
-        raise
+        raise Exception(f"Error in message builder function: {e}")
 
     msg = MIMEMultipart()
     msg["From"] = email_config.get("sender_email")
@@ -158,14 +158,11 @@ def send_email_with_smtp(
                 return response_message
 
     except smtplib.SMTPException as e:
-        logging.exception(f"SMTP Error: {e}")
-        raise
+        raise smtplib.SMTPException(f"SMTP Error: {e}")
     except FileNotFoundError:
-        logging.exception("Attachment file not found.")
-        raise
+        raise FileNotFoundError("Attachment file not found.")
     except Exception as e:
-        logging.exception(f"An unexpected error occurred: {e}")
-        raise
+        raise Exception(f"An unexpected error occurred: {e}")
 
 
 # --- Dict for choosing correct load functions corresponding to config.ini details---
@@ -220,5 +217,4 @@ def load_data(
             )
 
     except Exception as e:
-        logging.exception(f"An error occurred during the load operation: {e}")
-        raise
+        raise Exception(f"An error occurred during the load operation: {e}")

@@ -6,12 +6,16 @@ sys.path.insert(0, str(project_root))
 
 from utils.die import DIE
 
+# ----------------------------------------------------------------------------------------------- #
+# ---------------------------CONFIGURE JOB-SPECIFIC LOGIC HERE----------------------------------- #
+# ----------------------------------------------------------------------------------------------- #
 # --- Define custom transform function(s) (if any) for THIS JOB ---
 #     Uncomment and complete custom function(s) below
 #     Otherwise, job defaults to basic CSV export function in utils
 #     Extract and load functions are chosen based on required job settings in config.ini
-
-# --- For jobs that send a CSV file in an email:
+# ----------------------------------------------------------------------------------------------- #
+# --- For jobs that send an email (with a CSV): ------------------------------------------------- #
+# ----------------------------------------------------------------------------------------------- #
 # def message_builder(job_config: Dict[str, Any], file_path: str) -> Tuple[str, str]:
 #     """
 #     Assembles the custom email associated with job.
@@ -27,8 +31,9 @@ from utils.die import DIE
 #     subject = "Example Email for <job_name> Integration"
 #     body = "This is a test email <job_name> job, which sends an email."
 #     return subject, body
-
-# --- For jobs that modify the CSV file or have more advanced procedures:
+# ----------------------------------------------------------------------------------------------- #
+# --- For jobs that modify the CSV file or have more advanced procedures: ----------------------- #
+# ----------------------------------------------------------------------------------------------- #
 # def custom_transform(header: List[str], data:  List[Tuple[Any,...]], intermediate_file_path) -> str:
 #     """
 #     Performs the customized data transformation(s) unique to this DIE.
@@ -41,9 +46,13 @@ from utils.die import DIE
 #     Returns:
 #         The file path to the completed and transformed data, ready to be loaded.
 #     """
+#     # ... execute any needed preparatory logic
 #     intermediate_file = export_csv_from_tuple_array(data, intermediate_file_path, header)
 #     # ... apply transformations to intermediate_file and store in transformed_file
 #     return transformed_file
+# ----------------------------------------------------------------------------------------------- #
+# ----------------------------------------------------------------------------------------------- #
+# ----------------------------------------------------------------------------------------------- #
 
 # Comment out following line(s) if custom function(s) defined above:
 message_builder = None

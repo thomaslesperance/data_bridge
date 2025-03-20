@@ -31,8 +31,7 @@ def connect_to_db(job_config: Dict[str, Any]) -> jaydebeapi.Connection:
             source_config.get("driver_file"),
         )
     except Exception as e:
-        logging.exception(f"Failed to connect to database: {e}")
-        raise
+        raise Exception(f"Failed to connect to database: {e}")
 
 
 def load_query(query_file_path: Union[str, Path]) -> str:
@@ -53,11 +52,9 @@ def load_query(query_file_path: Union[str, Path]) -> str:
             query = f.read()
         return query
     except FileNotFoundError:
-        logging.exception(f"Query file not found: {query_file_path}")
-        raise
+        raise FileNotFoundError(f"Query file not found: {query_file_path}")
     except Exception as e:
-        logging.exception(f"Failed to load query from file: {query_file_path}")
-        raise
+        raise Exception(f"Failed to load query from file: {query_file_path}")
 
 
 def query_db(
@@ -81,8 +78,7 @@ def query_db(
             data = cursor.fetchall()
         return header, data
     except Exception as e:
-        logging.exception(f"Failed to execute database query: {e}")
-        raise
+        raise Exception(f"Failed to execute database query: {e}")
 
 
 def extract_data(
@@ -110,5 +106,4 @@ def extract_data(
         return header, data
 
     except Exception as e:
-        logging.exception(f"An error occurred during data extraction: {e}")
-        raise
+        raise Exception(f"An error occurred during data extraction: {e}")

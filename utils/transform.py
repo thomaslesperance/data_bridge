@@ -40,5 +40,4 @@ def export_csv_from_data(
         return returned_file_name
 
     except Exception as e:
-        logging.exception(f"Error exporting data to CSV: {e}")
-        raise
+        raise Exception(f"Error exporting data to CSV: {e}")
