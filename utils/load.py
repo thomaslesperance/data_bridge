@@ -144,7 +144,7 @@ def send_email_with_smtp(
 
             sendmail_response = smtp.sendmail(
                 msg["From"],
-                msg["To"].split(","),  # Correct: split into a list
+                msg["To"].split(","),
                 msg.as_string(),
             )
 

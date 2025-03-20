@@ -79,7 +79,7 @@ class DIE:
             # --- EXTRACT --- Data source must be specified in project config.ini
             header, data = extract_data(self.job_config, self.paths["query_file_path"])
             logging.info(
-                f"Data extracted from {self.job_config['source']['type']} database:  {self.job_config['source']['name']}"
+                f"Data extracted from {self.job_config['source']['type']} database:  {self.job_config['source_name']['name']}"
             )
 
             # --- TRANSFORM --- 'custom_transform' defaults to 'export_csv_from_data' if not defined in main.py
