@@ -21,9 +21,6 @@ def export_csv_from_data(
 
     Returns:
         The path to the created CSV file (str).
-
-    Raises:
-        Exception: If any error occurs during CSV creation.
     """
     try:
         # Ensure the directory exists

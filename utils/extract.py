@@ -16,7 +16,6 @@ def connect_to_db(job_config: Dict[str, Any]) -> jaydebeapi.Connection:
 
     Raises:
         ValueError: If required keys are missing from the config.
-        Exception: If the database connection fails.
     """
     source_config = job_config["source"]
     required_keys = ["user", "password", "conn_string", "driver_name", "driver_file"]
@@ -48,7 +47,6 @@ def load_query(query_file_path: Union[str, Path]) -> str:
 
     Raises:
         FileNotFoundError: If the query file doesn't exist.
-        Exception: For other errors during file reading.
     """
     try:
         with open(query_file_path, "r") as f:
@@ -75,9 +73,6 @@ def query_db(
     Returns:
         A tuple: (headers, data).  `headers` is a list of column names (strings).
                  `data` is a list of tuples, where each tuple represents a row.
-
-    Raises:
-        Exception: If any error occurs during query execution.
     """
     try:
         with db_connection.cursor() as cursor:
@@ -103,9 +98,6 @@ def extract_data(
     Returns:
         A tuple: (headers, data).  `headers` is a list of column names (strings).
                  `data` is a list of tuples, where each tuple represents a row.
-
-    Raises:
-        Exception: If any error occurs during extraction.
     """
     try:
         with connect_to_db(job_config) as db_connection:

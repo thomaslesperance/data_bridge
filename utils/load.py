@@ -30,7 +30,6 @@ def prepare_email(
     Raises:
         ValueError: If required config keys are missing.
         FileNotFoundError: If the attachment file doesn't exist.
-        Exception: If the message builder function fails.
     """
     if job_config["job"].get("destination_type") == "shared_service":
         email_config = job_config["job"]
@@ -78,7 +77,6 @@ def prepare_email(
 def send_email_with_smtp(
     job_config: Dict[str, Any],
     file_path: str,
-    *,
     message_builder: MessageBuilderFunction = None,
 ) -> str:
     """Sends data via email using SMTP.  Prepares and sends the email.
@@ -86,7 +84,7 @@ def send_email_with_smtp(
     Args:
         job_config: The nested job configuration dictionary.
         file_path: Path to the file to attach.
-        message_builder:  Custom function to build the email message.
+        message_builder: Custom function to build the email message.
 
     Returns:
         A string indicating the result of the email sending operation.
@@ -170,11 +168,12 @@ def send_email_with_smtp(
         raise
 
 
-# --- Module-Level Dictionary for Load Functions ---
+# --- Dict for choosing correct load functions corresponding to config.ini details---
 load_functions: Dict[str, LoadFunction] = {
     "smtp": send_email_with_smtp,
     # "sftp": transfer_file_with_sftp,
-    # Add more load functions here for other data transfer methods
+    # "fileshare": transfer_file_to_share,
+    # Add more load functions here for other data transfer methods as needed
 }
 
 
@@ -195,7 +194,6 @@ def load_data(
 
     Raises:
         ValueError: If no load function is found for the destination type.
-        Exception:  If any error occurs during the load operation.
     """
     try:
         destination_type = job_config["job"].get("destination_type")

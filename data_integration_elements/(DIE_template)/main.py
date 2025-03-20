@@ -52,8 +52,8 @@ custom_transform = None
 
 def main() -> None:
     """
-    Identifies the name of integration job from parent DIE dir name, instantiates DIE class,
-    passes custom funcitons to the class and runs the DIE object.
+    Identifies the name of the integration job from parent DIE directory name, instantiates DIE class,
+    passes custom functions to the class and runs the DIE object.
     """
     job_name = Path(__file__).resolve().parent.name.replace("DIE_", "")
     die = DIE(
