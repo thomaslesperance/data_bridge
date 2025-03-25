@@ -13,15 +13,8 @@ def connect_to_db(job_config: Dict[str, Any]) -> jaydebeapi.Connection:
 
     Returns:
         The database connection object.
-
-    Raises:
-        ValueError: If required keys are missing from the config.
     """
     source_config = job_config["source"]
-    required_keys = ["user", "password", "conn_string", "driver_name", "driver_file"]
-    if not all(source_config.get(key) for key in required_keys):
-        missing_keys = [key for key in required_keys if not source_config.get(key)]
-        raise ValueError(f"Missing required source config keys: {missing_keys}")
 
     try:
         return jaydebeapi.connect(
@@ -30,6 +23,7 @@ def connect_to_db(job_config: Dict[str, Any]) -> jaydebeapi.Connection:
             [source_config.get("user"), source_config.get("password")],
             source_config.get("driver_file"),
         )
+
     except Exception as e:
         raise Exception(f"Failed to connect to database: {e}")
 

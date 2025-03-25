@@ -26,28 +26,16 @@ def prepare_email(
 
     Returns:
         A MIMEMultipart object representing the complete email message.
-
-    Raises:
-        ValueError: If required config keys are missing.
-        TypeError: If recipient emails aren't in a list of strings.
-        FileNotFoundError: If the attachment file doesn't exist.
     """
     if job_config["job"].get("destination_type") == "shared_service":
         email_config = job_config["job"]
     else:  # job-specific smtp destination
         email_config = job_config["job"]
 
-    # Check if needed keys are present and create and validate recipient list
-    required_email_keys = ["recipients", "sender_email"]
-    if not all(email_config.get(key) for key in required_email_keys):
-        missing_keys = [key for key in required_email_keys if not email_config.get(key)]
-        raise ValueError(f"Missing required email keys: {missing_keys}")
-
+    # Create recipient list
     recipient_emails = [
         email.strip() for email in email_config.get("recipients").split(",")
     ]
-    if not all(isinstance(email, str) for email in recipient_emails):
-        raise TypeError("recipient_emails must be a list of strings.")
 
     # --- Build the message (subject and body) using the provided builder from main.py---
     try:
@@ -62,8 +50,6 @@ def prepare_email(
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "plain"))
 
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"Attachment not found: {file_path}")
     with open(file_path, "rb") as fil:
         part = MIMEApplication(fil.read(), Name=os.path.basename(file_path))
     part["Content-Disposition"] = (
@@ -90,36 +76,15 @@ def send_email_with_smtp(
         A string indicating the result of the email sending operation.
 
     Raises:
-        ValueError: If required config keys are missing, or no message builder.
+        ValueError: If message builder function not provided.
         smtplib.SMTPException: If an SMTP error occurs.
         FileNotFoundError: If the attachment file doesn't exist.
     """
     try:
         if job_config["job"].get("destination_type") == "shared_service":
             smtp_config = job_config["service"]
-            email_config = job_config["job"]
         else:  # job-specific smtp destination
             smtp_config = job_config["job"]  # All SMTP settings are here
-            email_config = job_config["job"]
-
-        # Validate existence of required keys
-        required_smtp_keys = [
-            "host",
-            "port",
-        ]  # user and password might not always be required
-        required_email_keys = ["recipients", "sender_email"]
-
-        if not all(smtp_config.get(key) for key in required_smtp_keys):
-            missing_keys = [
-                key for key in required_smtp_keys if not smtp_config.get(key)
-            ]
-            raise ValueError(f"Missing required SMTP keys: {missing_keys}")
-
-        if not all(email_config.get(key) for key in required_email_keys):
-            missing_keys = [
-                key for key in required_email_keys if not email_config.get(key)
-            ]
-            raise ValueError(f"Missing required email keys: {missing_keys}")
 
         # --- Prepare the email message ---
         if message_builder is None:  # Raise error if message_builder is None
@@ -193,6 +158,9 @@ def load_data(
         ValueError: If no load function is found for the destination type.
     """
     try:
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Data file to load not found: {file_path}")
+
         destination_type = job_config["job"].get("destination_type")
         if destination_type == "shared_service":
             service_type = job_config["service"]["type"]
@@ -201,15 +169,11 @@ def load_data(
 
         if service_type in load_functions:
             load_function = load_functions[service_type]
-            # Call the load function, passing the message_builder if needed.
-            if service_type == "smtp":
-                result = load_function(
-                    job_config, file_path, message_builder=message_builder
-                )
-            else:
-                result = load_function(
-                    job_config, file_path, message_builder=message_builder
-                )  # Still need to pass for consistency of load_functions
+
+            result = load_function(
+                job_config, file_path, message_builder=message_builder
+            )
+
             return result
         else:
             raise ValueError(

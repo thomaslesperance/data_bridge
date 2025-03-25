@@ -39,30 +39,34 @@ class DIE:
                                 from the data source specified in the config.ini file.
             message_builder: The custom email message building function passed to load_data for jobs that send emails.
         """
-        self.job_name = job_name
-        self.custom_transform = custom_transform
-        self.message_builder = message_builder
+        try:
+            self.job_name = job_name
+            self.custom_transform = custom_transform
+            self.message_builder = message_builder
 
-        # Get paths and assemble job configuration
-        self.paths = locate(self.job_name)
-        if not all(self.paths.values()):
-            raise ValueError(f"Could not locate all paths for DIE: {self.job_name}")
+            # Get paths and assemble job configuration
+            self.paths = locate(self.job_name)
 
-        self._config = load_config(self.paths["config_file_path"])
-        self.job_config = get_job_config(
-            self._config, self.job_name, self.paths["config_dir"]
-        )
+            self._config = load_config(self.paths["config_file_path"])
+            self.job_config = get_job_config(
+                self._config, self.job_name, self.paths["config_dir"]
+            )
 
-        # Determine output file name
-        self._output_dir = Path(self.paths["output_dir"])
-        self._intermediate_file_path = self._output_dir / determine_output_filename(
-            self.job_config, self.job_name
-        )
+            # Determine output file name
+            self._output_dir = Path(self.paths["output_dir"])
+            self._intermediate_file_path = self._output_dir / determine_output_filename(
+                self.job_config, self.job_name
+            )
 
-        # Create output directory and configure logging
-        self._output_dir.mkdir(parents=True, exist_ok=True)
-        self._log_file = Path(self.paths["log_file_path"])
-        self._configure_logging()
+            # Create output directory and configure logging
+            self._output_dir.mkdir(parents=True, exist_ok=True)
+            self._log_file = Path(self.paths["log_file_path"])
+            self._configure_logging()
+
+        except Exception as e:
+            logging.exception(
+                f"An error occurred in DIE initialization: {self.job_name}\n\n{e}"
+            )
 
     def _configure_logging(self) -> None:
         """Configures logging for this DIE instance using logging from Python STL."""

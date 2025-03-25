@@ -23,10 +23,8 @@ def export_csv_from_data(
         The path to the created CSV file (str).
     """
     try:
-        # Ensure the directory exists
-        dir_name = os.path.dirname(returned_file_name)
-        if dir_name and not os.path.exists(dir_name):
-            os.makedirs(dir_name)
+        if not header:
+            raise ValueError("Header list not found or empty")
 
         with open(returned_file_name, "w", newline="", encoding="utf-8") as csvfile:
             writer = csv.writer(
@@ -36,7 +34,7 @@ def export_csv_from_data(
                 writer.writerow(header)
             writer.writerows(data)
 
-        logging.info(f"CSV file created: {returned_file_name}")
+        logging.info(f"CSV file created: {returned_file_name}\nData rows: {len(data)}")
         return returned_file_name
 
     except Exception as e:
