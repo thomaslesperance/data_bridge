@@ -1,10 +1,22 @@
 from pathlib import Path
 import sys
+import logging
 
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from utils.die import DIE
+from utils.die import DIE, setup_and_get_die  # Class imported only for type hints
+from utils.transform import (
+    export_csv_from_data,
+)  # Or any others needed to build custom transform functions as needed
+from typing import (
+    List,
+    Tuple,
+    Any,
+    Dict,
+    Optional,
+    Callable,
+)  # Kept unused type imports for cases where custom transform functions defined
 
 # ----------------------------------------------------------------------------------------------- #
 # ---------------------------CONFIGURE JOB-SPECIFIC LOGIC HERE----------------------------------- #
@@ -13,6 +25,8 @@ from utils.die import DIE
 #     Uncomment and complete custom function(s) below
 #     Otherwise, job defaults to basic CSV export function in utils
 #     Extract and load functions are chosen based on required job settings in config.ini
+# ----------------------------------------------------------------------------------------------- #
+
 # ----------------------------------------------------------------------------------------------- #
 # --- For jobs that send an email (with a CSV): ------------------------------------------------- #
 # ----------------------------------------------------------------------------------------------- #
@@ -31,6 +45,11 @@ from utils.die import DIE
 #     subject = "Example Email for <job_name> Integration"
 #     body = "This is a test email <job_name> job, which sends an email."
 #     return subject, body
+# ----------------------------------------------------------------------------------------------- #
+# ----------------------------------------------------------------------------------------------- #
+
+message_builder_function: Optional[Callable] = None
+
 # ----------------------------------------------------------------------------------------------- #
 # --- For jobs that modify the CSV file or have more advanced procedures: ----------------------- #
 # ----------------------------------------------------------------------------------------------- #
@@ -52,25 +71,71 @@ from utils.die import DIE
 #     return transformed_file
 # ----------------------------------------------------------------------------------------------- #
 # ----------------------------------------------------------------------------------------------- #
-# ----------------------------------------------------------------------------------------------- #
 
-# Comment out following line(s) if custom function(s) defined above:
-message_builder = None
-custom_transform = None
+custom_transform_function: Optional[Callable] = None
 
 
 def main() -> None:
     """
-    Identifies the name of the integration job from parent DIE directory name, instantiates DIE class,
-    passes custom functions to the class and runs the DIE object.
+    Top-level execution function. Handles setup and run phases,
+    and performs top-level exception logging.
     """
-    job_name = Path(__file__).resolve().parent.name.replace("DIE_", "")
-    die = DIE(
-        job_name=job_name,
-        custom_transform=custom_transform,
-        message_builder=message_builder,
-    )
-    die.run()
+
+    die_instance: Optional[DIE] = None
+    job_name: str = "UnknownJob"  # Default for logging if name determination fails
+
+    try:
+        # --- Phase 1: Setup ---
+        try:
+            job_name = Path(__file__).resolve().parent.name.replace("DIE_", "")
+            if not job_name:
+                sys.stderr.write(
+                    "FATAL: Could not determine job name from directory structure.\n"
+                )
+                raise ValueError(
+                    "Could not determine job name from directory structure."
+                )
+
+            die_instance = setup_and_get_die(
+                job_name=job_name,
+                custom_transform=custom_transform_function,
+                message_builder=message_builder_function,
+            )
+
+        except Exception as setup_error:
+            # Check if logging was successfully configured during setup attempt
+            if logging.getLogger().hasHandlers():
+                logging.exception(
+                    f"FATAL ERROR during setup phase for job '{job_name}'"
+                )
+            else:
+                # Fallback to stderr if logging setup failed
+                sys.stderr.write(
+                    f"FATAL ERROR during setup phase for job '{job_name}': {setup_error}\n"
+                )
+                # Print traceback to stderr here for setup errors when logging failed
+                import traceback
+
+                traceback.print_exc(file=sys.stderr)
+
+            # Re-raise the exception to prevent attempting the run phase
+            raise setup_error
+
+        # --- Phase 2: Run ---
+        # Only proceed if setup was successful (die_instance is not None)
+        if die_instance:
+            try:
+                die_instance.run()
+
+            except Exception as run_error:
+                logging.exception(f"FATAL ERROR during run phase for job '{job_name}'")
+                raise run_error
+
+    except Exception:
+        # Ensures any unhandled exception from setup or run phases result in a non-zero exit code
+        sys.exit(1)
+
+    sys.exit(0)
 
 
 if __name__ == "__main__":

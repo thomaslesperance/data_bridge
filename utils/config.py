@@ -1,6 +1,5 @@
 import configparser
 from pathlib import Path
-from typing import Any
 import logging
 
 
@@ -333,61 +332,3 @@ def get_job_config(
     _validate_job_config(final_config)
 
     return final_config
-
-
-def determine_output_filename(job_config: dict, job_name: str) -> str:
-    """
-    Determines the output filename. Defaults to job_name.csv.
-
-    Args:
-        job_config: The combined, nested job configuration dictionary.
-        job_name: The name of the job.
-
-    Returns:
-        The determined output filename (e.g., "attendance.csv").
-    """
-    try:
-        base_filename = job_config["job"].get("base_filename", job_name)
-        return f"{base_filename}.csv"
-    except Exception as e:
-        raise Exception(f"Error determining output filename: {e}")
-
-
-def locate(job_name: str) -> dict:
-    """
-    Calculates and returns necessary file/directory paths.
-
-    Args:
-        job_name: The name of the job (e.g., "attendance_sync").
-
-    Returns:
-        A dictionary of paths.
-    """
-    try:
-        # Correctly calculate project_root relative to *this* file (config.py)
-        project_root = Path(__file__).resolve().parent.parent
-        script_dir = project_root / "data_integration_elements" / f"DIE_{job_name}"
-        output_dir = script_dir / "output"
-        config_dir = project_root / "config"
-
-        query_file_path = script_dir / "query.sql"
-        log_file_path = output_dir / "output.log"
-        config_file_path = config_dir / "config.ini"
-
-        paths = {
-            "project_root": str(project_root),
-            "script_dir": str(script_dir),
-            "output_dir": str(output_dir),
-            "config_dir": str(config_dir),
-            "query_file_path": str(query_file_path),
-            "log_file_path": str(log_file_path),
-            "config_file_path": str(config_file_path),
-        }
-
-        if not all(paths.values()):
-            raise ValueError(f"Could not locate all paths for DIE: {job_name}")
-
-        return paths
-
-    except Exception as e:
-        raise Exception(f"Error determining paths: {e}")
