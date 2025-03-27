@@ -2,63 +2,59 @@ import logging
 from pathlib import Path
 from typing import Callable, Dict, Any, Optional
 import sys
+from pydantic import ValidationError
 from utils.config import load_config, get_job_config
 from utils.extract import extract_data
 from utils.transform import export_csv_from_data
 from utils.load import load_data
+from utils.models import InitialPaths, FinalPaths
 
 
-def _determine_paths(job_name: str) -> Dict[str, str]:
+def _determine_paths(job_name: str) -> InitialPaths:
     """
     Calculates and returns necessary file/directory paths.
+    Existence checks (except for script_dir itself) are deferred to Pydantic.
+    Validates returned dict using InitialPaths model.
 
     Args:
         job_name: The name of the job (e.g., "attendance_sync").
 
     Returns:
-        A dictionary of paths.
+        An InitialJobPaths model instance.
+
+    Raises:
+        FileNotFoundError, ValueError, ValidationError, RuntimeError: On failure.
     """
     try:
         project_root = Path(__file__).resolve().parent.parent
         script_dir = project_root / "data_integration_elements" / f"DIE_{job_name}"
         output_dir = script_dir / "output"
         config_dir = project_root / "config"
-
-        if not script_dir.is_dir():
-            raise FileNotFoundError(
-                f"DIE script directory not found for job '{job_name}': {script_dir}"
-            )
-
         query_file_path = script_dir / "query.sql"
         log_file_path = output_dir / "output.log"
         config_file_path = config_dir / "config.ini"
 
-        if not config_file_path.is_file():
-            raise FileNotFoundError(f"Main config file not found: {config_file_path}")
-        if not query_file_path.is_file():
-            raise FileNotFoundError(
-                f"Query file not found for job '{job_name}': {query_file_path}"
-            )
-
-        paths = {
-            "project_root": str(project_root),
-            "script_dir": str(script_dir),
-            "output_dir": str(output_dir),
-            "config_dir": str(config_dir),
-            "query_file_path": str(query_file_path),
-            "log_file_path": str(log_file_path),
-            "config_file_path": str(config_file_path),
+        initial_paths_data = {
+            "project_root": project_root,
+            "script_dir": script_dir,
+            "output_dir": output_dir,
+            "config_dir": config_dir,
+            "query_file_path": query_file_path,
+            "log_file_path": log_file_path,
+            "config_file_path": config_file_path,
         }
 
-        if not all(p for p in paths.values() if isinstance(p, str)):
-            raise ValueError(
-                f"Could not determine all essential paths for DIE: {job_name}"
-            )
+        validated_initial_paths = InitialPaths.model_validate(initial_paths_data)
+        return validated_initial_paths
 
-        return paths
-
+    except ValidationError as e:
+        sys.stderr.write(
+            f"ERROR: Initial path validation (Pydantic) failed for job '{job_name}':\n{e}\n"
+        )
+        raise ValueError("Initial path validation failed") from e
     except Exception as e:
-        raise e
+        sys.stderr.write(f"ERROR determining initial paths for job '{job_name}': {e}\n")
+        raise RuntimeError(f"Error determining initial paths: {e}") from e
 
 
 def _determine_output_filename(job_config: Dict[str, Any], job_name: str) -> str:
@@ -70,7 +66,7 @@ def _determine_output_filename(job_config: Dict[str, Any], job_name: str) -> str
         job_name: The name of the job (e.g., "attendance_sync").
 
     Raises:
-        RuntimeError: if defaulting to job_name for output file name didn't work and still encountered an error.
+        RuntimeError: If defaulting to job_name for output file name didn't work and still encountered an error.
     """
     try:
         base_filename = job_config.get("job", {}).get("base_filename", job_name)
@@ -137,7 +133,7 @@ class DIE:
         self,
         job_name: str,
         job_config: Dict[str, Any],
-        paths: Dict[str, str],
+        paths: FinalPaths,
         transform_function: Callable,
         message_builder: Optional[Callable] = None,
     ) -> None:
@@ -147,7 +143,7 @@ class DIE:
         Args:
             job_name: The name of the integration job and the suffix of this DIE's directory name (DIE_<job_name>).
             job_config: A nested dict containing all of the config info associated with this job based on the config.ini file.
-            paths: A dict of absolute path strings defining the directory structure of the project.
+            paths: A validated Paths model instance containing essential paths.
             transform_function: The custom transformations unique to this job done to the data extracted
                                 from the data source specified in the config.ini file; defaults to exporting a CSV.
             message_builder: The custom email message building function passed to load_data for jobs that send emails.
@@ -163,6 +159,7 @@ class DIE:
         """
         Runs the data integration process (Extract, Transform, Load) using the state unique to this DIE.
         Raises exceptions on failure, but expects caller (main.py) to log them.
+        Uses attribute access on self.paths model.
 
         Raises:
             FileNotFoundError: If transformed data file not found after transform step.
@@ -170,29 +167,34 @@ class DIE:
         logging.info(f"Starting data integration for job: {self.job_name}")
 
         # --- EXTRACT --- Data source must be specified in project config.ini
-        header, data = extract_data(self.job_config, self.paths["query_file_path"])
+        query_file = self.paths.query_file_path
+        header, data = extract_data(self.job_config, query_file)
+        source_name = self.job_config.get("source", {}).get(
+            "source_name", "Unknown Source"
+        )
         logging.info(
-            f"Data extracted from {self.job_config['source']['type']} database:  {self.job_config['source_name']['name']}"
+            f"Data extracted successfully from source '{source_name}'. Records retrieved: {len(data)}"
         )
 
         # --- TRANSFORM --- 'custom_transform' defaults to 'export_csv_from_data' if not defined in main.py
-        transformed_data_file_path = self.transform_function(
-            header, data, self.paths["intermediate_file_path"]
+        intermediate_file_path = self.paths.intermediate_file_path
+        transformed_file_path = self.transform_function(
+            header, data, intermediate_file_path
         )
-        if (
-            not transformed_data_file_path
-            or not Path(transformed_data_file_path).is_file()
-        ):
+        if not transformed_file_path or not Path(transformed_file_path).is_file():
             raise FileNotFoundError(
-                f"Transformed data file not found after transform step at: {transformed_data_file_path or 'None'}"
+                f"Transformed data file not found after transform step at: {transformed_file_path or 'None'}"
             )
-        logging.info(f"Data transformed and saved to {transformed_data_file_path}")
+        logging.info(f"Data transformed and saved to {transformed_file_path}")
 
         # --- LOAD --- Data destination must be specified in project config.ini
         response = load_data(
-            self.job_config, transformed_data_file_path, self.message_builder
+            self.job_config, transformed_file_path, self.message_builder
         )
-        logging.info(f"Data transfer completed. Response: {response}")
+        dest_type = self.job_config.get("job", {}).get("destination_type", "N/A")
+        logging.info(
+            f"Data load initiated. Destination type: '{dest_type}'. Response/Status: {response}"
+        )
 
         logging.info(
             f"Data integration run for job: {self.job_name} completed successfully."
@@ -207,40 +209,52 @@ def setup_and_get_die(
     """
     Performs setup (paths, logging, config) and returns an initialized DIE instance.
     Raises exceptions on failure, but expects caller (main.py) to log them.
+    Includes Pydantic validation for paths.
 
     Args:
         job_name: The name of the integration job and the suffix of this DIE's directory name (DIE_<job_name>).
         custom_transform: The custom transformation defined in main.py unique to this job; defaults to exporting a CSV.
         message_builder: The custom message builder defined in main.py unique to this job; needed for email-based jobs.
 
-    Returns: An initialized DIE instance.
+    Returns:
+        An initialized DIE object ready to run.
+
+    Raises:
+        FileNotFoundError, ValueError, RuntimeError, ValidationError: If setup fails.
     """
-    # TO-DO: after implementing data validation with pydantic, validate "job_config" and "paths" dicts
-    # especially before passing as arguments to constructor
 
     # 1. Determine paths
-    paths = _determine_paths(job_name)
+    initial_paths: InitialPaths = _determine_paths(job_name)
 
     # 2. Configure logging
-    _configure_logging(paths["log_file_path"])
+    _configure_logging(str(initial_paths.log_file_path))
     logging.info(
-        f"Logging configured for job: {job_name}. Log file: {paths['log_file_path']}"
+        f"Logging configured for job: {job_name}. Log file: {initial_paths.log_file_path}"
     )
     logging.info(f"Starting setup for job: {job_name}")
 
     # 3. Load main configuration
-    config = load_config(paths["config_file_path"])
+    config = load_config(initial_paths.config_file_path)
     logging.info("Main config file loaded.")
 
     # 4. Get and validate specific job configuration
-    job_config = get_job_config(config, job_name, paths["config_dir"])
+    job_config = get_job_config(config, job_name, initial_paths.config_dir)
     logging.info("Job-specific configuration loaded and validated.")
 
-    # 5. Determine output filename and full path
+    # 5. Determine output filename and assemble final validated paths
     output_filename = _determine_output_filename(job_config, job_name)
-    intermediate_file_path = str(Path(paths["output_dir"]) / output_filename)
-    paths["intermediate_file_path"] = intermediate_file_path
+    intermediate_file_path: Path = initial_paths.output_dir / output_filename
     logging.info(f"Intermediate file path determined: {intermediate_file_path}")
+
+    try:
+        final_paths_data = initial_paths.model_dump()
+        final_paths_data["intermediate_file_path"] = intermediate_file_path
+
+        validated_final_paths = FinalPaths.model_validate(final_paths_data)
+        logging.info("Final job paths validated successfully.")
+    except ValidationError as e:
+        logging.error(f"Final path validation failed for job '{job_name}':\n{e}")
+        raise ValueError(f"Final path validation failed") from e
 
     # 6. Determine actual transform function
     actual_transform_function = custom_transform or export_csv_from_data
@@ -253,7 +267,7 @@ def setup_and_get_die(
     die_instance = DIE(
         job_name=job_name,
         job_config=job_config,
-        paths=paths,
+        paths=validated_final_paths,
         transform_function=actual_transform_function,
         message_builder=message_builder,
     )
