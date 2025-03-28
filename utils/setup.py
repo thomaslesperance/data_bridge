@@ -5,7 +5,8 @@ from typing import Optional, Callable
 from pydantic import ValidationError
 from utils.models import InitialPaths, FinalPaths, ValidatedConfigUnion
 from utils.die import DIE
-from utils.transform import export_csv_from_data
+from utils.transform import CustomTransformFunction, export_csv_from_data
+from utils.load import MessageBuilderFunction
 
 # Must update this if new function defined for default behavior of transform step
 # Currently, it's just a simple export to CSV...
@@ -176,8 +177,8 @@ def _determine_output_filename(job_config: ValidatedConfigUnion, job_name: str) 
 
 def setup_and_get_die(
     job_name: str,
-    custom_transform_fn: Optional[Callable] = None,
-    message_builder_fn: Optional[Callable] = None,
+    custom_transform_fn: Optional[CustomTransformFunction] = None,
+    message_builder_fn: Optional[MessageBuilderFunction] = None,
 ) -> DIE:
     """
     Performs setup (paths, logging, config) and returns an initialized DIE instance.
@@ -243,7 +244,9 @@ def setup_and_get_die(
             raise ValidationError(f"Final path validation failed:\n{e}") from e
 
         # 7. ---------Determine actual transform function -------------------------------
-        transform_fn = custom_transform_fn or DEFAULT_TRANSFORM_FN
+        transform_fn: CustomTransformFunction = (
+            custom_transform_fn or DEFAULT_TRANSFORM_FN
+        )
         if transform_fn != DEFAULT_TRANSFORM_FN:
             logging.info("Using custom transform function provided.")
         else:

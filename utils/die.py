@@ -1,7 +1,7 @@
 import logging
-from typing import Callable, Any, Optional
 from utils.extract import extract_data
-from utils.load import load_data
+from utils.transform import CustomTransformFunction
+from utils.load import MessageBuilderFunction, load_data
 from utils.models import FinalPaths, ValidatedConfigUnion
 
 
@@ -27,8 +27,8 @@ class DIE:
         job_name: str,
         job_config: ValidatedConfigUnion,
         paths: FinalPaths,
-        transform_fn: Callable,
-        message_builder_fn: Optional[Callable] = None,
+        transform_fn: CustomTransformFunction,
+        message_builder_fn: MessageBuilderFunction = None,
     ) -> None:
         """
         Initializes a DIE object.
