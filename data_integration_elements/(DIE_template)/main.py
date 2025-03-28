@@ -9,6 +9,9 @@ from utils.die import DIE, setup_and_get_die  # Class imported only for type hin
 from utils.transform import (
     export_csv_from_data,
 )  # Or any others needed to build custom transform functions as needed
+from utils.models import ValidatedConfigUnion
+from utils.transform import CustomTransformFunction
+from utils.load import MessageBuilderFunction
 from typing import (
     List,
     Tuple,
@@ -30,7 +33,10 @@ from typing import (
 # ----------------------------------------------------------------------------------------------- #
 # --- For jobs that send an email (with a CSV): ------------------------------------------------- #
 # ----------------------------------------------------------------------------------------------- #
-# def message_builder(job_config: Dict[str, Any], file_path: str) -> Tuple[str, str]:
+# def message_builder(
+#   job_config: ValidatedConfigUnion,
+#   file_path: Path
+# ) -> Tuple[str, str]:
 #     """
 #     Assembles the custom email associated with job.
 
@@ -48,12 +54,16 @@ from typing import (
 # ----------------------------------------------------------------------------------------------- #
 # ----------------------------------------------------------------------------------------------- #
 
-message_builder_function: Optional[Callable] = None
+message_builder_function: Optional[MessageBuilderFunction] = None
 
 # ----------------------------------------------------------------------------------------------- #
 # --- For jobs that modify the CSV file or have more advanced procedures: ----------------------- #
 # ----------------------------------------------------------------------------------------------- #
-# def custom_transform(header: List[str], data:  List[Tuple[Any,...]], intermediate_file_path) -> str:
+# def custom_transform(
+#   header: List[str],
+#   data:  List[Tuple[Any,...]],
+#   intermediate_file_path: Path
+# ) -> Path:
 #     """
 #     Performs the customized data transformation(s) unique to this DIE.
 
@@ -66,13 +76,13 @@ message_builder_function: Optional[Callable] = None
 #         The file path to the completed and transformed data, ready to be loaded.
 #     """
 #     # ... execute any needed preparatory logic
-#     intermediate_file = export_csv_from_tuple_array(data, intermediate_file_path, header)
+#     intermediate_file = export_csv_from_tuple_array(header, data, intermediate_file_path)
 #     # ... apply transformations to intermediate_file and store in transformed_file
 #     return transformed_file
 # ----------------------------------------------------------------------------------------------- #
 # ----------------------------------------------------------------------------------------------- #
 
-custom_transform_function: Optional[Callable] = None
+custom_transform_function: Optional[CustomTransformFunction] = None
 
 
 def main() -> None:
@@ -99,11 +109,11 @@ def main() -> None:
             # Check if logging was configured before error occured
             if logging.getLogger().hasHandlers():
                 logging.exception(
-                    f"Error during setup phase for job '{job_name}' (logging was not configured):\n{setup_error}; "
+                    f"Error during setup phase (logging was not configured):\n{setup_error}; "
                 )
             else:
                 sys.stderr.write(
-                    f"Error during setup phase for job '{job_name}' (logging was configured):\n{setup_error}; "
+                    f"Error during setup phase (logging was configured):\n{setup_error}; "
                 )
                 import traceback
 
@@ -116,9 +126,7 @@ def main() -> None:
                 die_instance.run()
 
             except Exception as run_error:
-                logging.exception(
-                    f"Error during run phase for job '{job_name}:\n{run_error}'"
-                )
+                logging.exception(f"Error during run phase:\n{run_error}'")
                 raise run_error
 
     except Exception:

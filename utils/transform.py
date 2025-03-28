@@ -1,8 +1,11 @@
-import os
 import csv
 import logging
-from typing import List, Tuple, Any
+from typing import Callable, List, Tuple, Any
 from pathlib import Path
+
+
+# Type alias for custom transform functions
+CustomTransformFunction = Callable[[List[str], List[Tuple[Any, ...], Path]], Path]
 
 
 def export_csv_from_data(
@@ -10,7 +13,7 @@ def export_csv_from_data(
     data: List[Tuple[Any, ...]],
     returned_file_name: Path,
     use_quotes: bool = True,
-) -> str:
+) -> Path:
     """
     Exports data to a CSV file.
 

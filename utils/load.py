@@ -5,39 +5,35 @@ from email.mime.text import MIMEText
 from email.utils import COMMASPACE, formatdate
 import logging
 import os
-from typing import Dict, Callable, Any, Tuple
+from typing import Dict, Callable, Any, Tuple, Union
 from pathlib import Path
 from utils.models import ValidatedConfigUnion
 
-# Type alias for message builder functions.
-MessageBuilderFunction = Callable[[Dict[str, Any], str], Tuple[str, str]]
+# Type alias for message builder functions
+MessageBuilderFunction = Callable[[ValidatedConfigUnion, Path], Tuple[str, str]]
 
-# Type alias for load functions.
-LoadFunction = Callable[[Dict[str, Any], str, MessageBuilderFunction], str]
+# Type alias for load functions
+LoadFunction = Callable[
+    [ValidatedConfigUnion, Path, Union[MessageBuilderFunction, None]], str
+]
 
 
 def prepare_email(
-    job_config: Dict[str, Any], file_path: str, message_builder: MessageBuilderFunction
+    job_config: ValidatedConfigUnion,
+    file_path: Path,
+    message_builder: MessageBuilderFunction,
 ) -> MIMEMultipart:
     """Prepares the email message, including building the subject/body.
 
     Args:
-        job_config: The nested job configuration.
+        job_config: The (validated) nested job configuration.
         file_path: Path to the intermediate file to attach.
         message_builder: The custom message builder function defined in DIE main.py.
 
     Returns:
         A MIMEMultipart object representing the complete email message.
     """
-    if job_config["job"].get("destination_type") == "shared_service":
-        email_config = job_config["job"]
-    else:  # job-specific smtp destination
-        email_config = job_config["job"]
-
-    # Create recipient list
-    recipient_emails = [
-        email.strip() for email in email_config.get("recipients").split(",")
-    ]
+    email_config = job_config.job
 
     # --- Build the message (subject and body) using the provided builder from main.py---
     try:
@@ -46,8 +42,8 @@ def prepare_email(
         raise Exception(f"Error in message builder function: {e}")
 
     msg = MIMEMultipart()
-    msg["From"] = email_config.get("sender_email")
-    msg["To"] = COMMASPACE.join(recipient_emails)
+    msg["From"] = email_config.sender_email
+    msg["To"] = COMMASPACE.join(email_config.recipients)
     msg["Date"] = formatdate(localtime=True)
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "plain"))
@@ -63,14 +59,14 @@ def prepare_email(
 
 
 def send_email_with_smtp(
-    job_config: Dict[str, Any],
-    file_path: str,
+    job_config: ValidatedConfigUnion,
+    file_path: Path,
     message_builder: MessageBuilderFunction = None,
 ) -> str:
     """Sends data via email using SMTP.  Prepares and sends the email.
 
     Args:
-        job_config: The nested job configuration dictionary.
+        job_config: The (validated) nested job configuration dictionary.
         file_path: Path to the file to attach.
         message_builder: Custom function to build the email message.
 
@@ -83,28 +79,27 @@ def send_email_with_smtp(
         FileNotFoundError: If the attachment file doesn't exist.
     """
     try:
-        if job_config["job"].get("destination_type") == "shared_service":
-            smtp_config = job_config["service"]
-        else:  # job-specific smtp destination
-            smtp_config = job_config["job"]  # All SMTP settings are here
+        # --- Determine is shared or unique smtp destination ---
+        if job_config.job.is_shared_destination:
+            smtp_config = job_config.shared_dest
+        else:  # All smtp config in job sub-dict
+            smtp_config = job_config.job
 
         # --- Prepare the email message ---
-        if message_builder is None:  # Raise error if message_builder is None
+        if message_builder is None:
             raise ValueError(
                 "A 'message_builder' function must be provided for SMTP jobs."
             )
         msg = prepare_email(job_config, file_path, message_builder)
 
         # --- Connect and Send ---
-        with smtplib.SMTP(
-            host=smtp_config.get("host"), port=int(smtp_config.get("port"))
-        ) as smtp:
+        with smtplib.SMTP(host=smtp_config.host, port=smtp_config.port) as smtp:
             logging.info(
-                f"Connecting to SMTP server (no encryption): {smtp_config.get('host')}:{smtp_config.get('port')}"
+                f"Connecting to SMTP server (no encryption): {smtp_config.host}:{smtp_config.port}"
             )
 
             if "user" in smtp_config and "password" in smtp_config:
-                smtp.login(smtp_config.get("user"), smtp_config.get("password"))
+                smtp.login(smtp_config.user, smtp_config.password)
 
             logging.info(f"Sending email from: {msg['From']}")
             logging.info(f"Sending email to  : {msg['To']}")
@@ -160,27 +155,28 @@ def load_data(
         ValueError: If no load function is found for the destination type.
     """
     try:
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"Data file to load not found: {file_path}")
-
-        destination_type = job_config["job"].get("destination_type")
-        if destination_type == "shared_service":
-            service_type = job_config["service"]["type"]
-        else:
-            service_type = destination_type
-
-        if service_type in load_functions:
-            load_function = load_functions[service_type]
-
-            result = load_function(
-                job_config, file_path, message_builder=message_builder
+        # Ensure transformed data present for loading
+        if not file_path.is_file():
+            raise FileNotFoundError(
+                f"""Transformed data file not found for loading: {file_path or 'None'}"""
             )
 
+        # Determine load protocol for job
+        load_protocol = None
+        is_shared_destination = job_config.job.is_shared_destination
+        if is_shared_destination:
+            load_protocol = job_config.shared_dest.protocol
+        else:
+            load_protocol = job_config.job.protocol
+
+        # Select corresponding load function
+        if load_protocol in load_functions:
+            load_function: LoadFunction = load_functions[load_protocol]
+            result = load_function(job_config, file_path, message_builder)
             return result
+
         else:
-            raise ValueError(
-                f"No load function found for destination type: {service_type}"
-            )
+            raise ValueError(f"No function found for load protocol: {load_protocol}")
 
     except Exception as e:
         raise Exception(f"An error occurred during the load operation: {e}")

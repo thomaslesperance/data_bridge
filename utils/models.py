@@ -41,11 +41,10 @@ def parse_comma_separated_str(value: str) -> List[str]:
 
 
 # ------------------- DATA SOURCE MODELS -------------------
-class BaseSource(BaseModel):
+class SourceSkyward(BaseModel):
     """Base model for data source configurations."""
 
     source_name: str  # Added dynamically from config.ini section name
-    type: str
     user: str
     password: SecretStr
     conn_string: SecretStr
@@ -53,24 +52,18 @@ class BaseSource(BaseModel):
     driver_file: FilePath
 
 
-class SourceSkyward(BaseSource):
-    """Configuration specific to Skyward data sources."""
-
-    type: Literal["skyward"]
-
-
 # ------------------- SHARED DESTINATION MODELS -------------------
 class BaseSharedDest(BaseModel):
     """Base model for shared destination configurations."""
 
-    destination_name: str  # Added dynamically from config.ini section name
-    type: str
+    shared_dest_name: str  # Added dynamically from config.ini section name
+    protocol: str
 
 
 class SharedDestSmtp(BaseSharedDest):
     """Configuration specific to shared SMTP destinations."""
 
-    type: Literal["smtp"]
+    shared_dest_name: Literal["internal_smtp"]
     host: str
     port: int = 25
 
@@ -78,7 +71,7 @@ class SharedDestSmtp(BaseSharedDest):
 class SharedDestFileshare(BaseSharedDest):
     """Configuration specific to shared Fileshare destinations."""
 
-    type: Literal["fileshare"]
+    shared_dest_name: Literal["skyward_exports"]
     mount_path: DirectoryPath
 
 
@@ -88,17 +81,20 @@ class BaseJob(BaseModel):
 
     job_name: str  # Added dynamically from config.ini section name
     source: str
-    shared_destination: bool
-    destination: str
+    is_shared_destination: bool
     base_filename: str
 
 
 # --- Jobs loading to unique destinations ---
-class JobUniqueSftp(BaseJob):
+class BaseJobUniqueDest(BaseJob):
+    protocol: str
+
+
+class JobUniqueSftp(BaseJobUniqueDest):
     """<job_name> INI section details for unique SFTP destinations."""
 
-    shared_destination: Literal[False]
-    destination: Literal["sftp"]
+    is_shared_destination: Literal[False]
+    protocol: Literal["sftp"]
     host: str
     user: str
     password: SecretStr
@@ -107,10 +103,17 @@ class JobUniqueSftp(BaseJob):
 
 
 # --- Jobs loading to shared destinations ---
-class JobSharedSmtp(BaseJob):
+class BaseJobSharedDest(BaseJob):
+    """Comon fields for jobs loading to shared destinations."""
+
+    is_shared_destination: Literal[True]
+    shared_destination: str
+
+
+class JobSharedSmtp(BaseJobSharedDest):
     """<job_name> INI section details for jobs using shared SMTP destinations."""
 
-    shared_destination: Literal[True]
+    shared_destination: Literal["internal_smtp"]
     recipients: List[EmailStr]
     sender_email: EmailStr
 
@@ -120,10 +123,10 @@ class JobSharedSmtp(BaseJob):
         return parse_comma_separated_str(v)
 
 
-class JobSharedFileshare(BaseJob):
+class JobSharedFileshare(BaseJobSharedDest):
     """<job_name> INI section details for jobs using shared Fileshare destinations."""
 
-    shared_destination: Literal[True]
+    shared_destination: Literal["skyward_exports"]
     path: str
 
 
@@ -132,6 +135,7 @@ class ValidatedConfigUnique(BaseModel):
     """Fully validated configuration for a job with a unique destination."""
 
     source: "SourceUnion"
+    shared_dest: None
     job: "JobUniqueUnion"
 
 
@@ -139,7 +143,7 @@ class ValidatedConfigSmtp(BaseModel):
     """Fully validated configuration for a job using a shared SMTP destination."""
 
     source: "SourceUnion"
-    shared_dest_config: SharedDestSmtp
+    shared_dest: SharedDestSmtp
     job: JobSharedSmtp
 
 
@@ -147,7 +151,7 @@ class ValidatedConfigFileshare(BaseModel):
     """Fully validated configuration for a job using a shared Fileshare destination."""
 
     source: "SourceUnion"
-    shared_dest_config: SharedDestFileshare
+    shared_dest: SharedDestFileshare
     job: JobSharedFileshare
 
 
@@ -197,3 +201,44 @@ class FinalPaths(InitialPaths):
     """Adds the job-config-dependent intermediate path."""
 
     intermediate_file_path: Path
+
+
+# job_config: nested dict validated with pydantic models above; has the following shape:
+# job_config = {
+#     "source": {
+#         "source_name",
+#         "user",
+#         "password",
+#         "conn_string",
+#         "driver_name",
+#         "driver_file"
+#     },
+#     "shared_dest": None || {
+#         "shared_dest_name",
+#         "protocol",
+#         "host",
+#         "port",
+#         "mount_path"
+#     },
+#     "job": {
+#         # Common to all jobs
+#         "job_name",
+#         "source",
+#         "is_shared_destination",
+#         "base_filename",
+#         # Common to all shared dest jobs
+#         "shared_destination",
+#         ## shared: internal_smtp jobs
+#         "recipients",
+#         "sender_email",
+#         ## shared: skyward_exports jobs
+#         "path",
+#         # Unique destination SFTP jobs
+#         "protocol",
+#         "host",
+#         "user",
+#         "password",
+#         "port",
+#         "remote_path",
+#     }
+# }
