@@ -6,6 +6,8 @@ from email.utils import COMMASPACE, formatdate
 import logging
 import os
 from typing import Dict, Callable, Any, Tuple
+from pathlib import Path
+from utils.models import ValidatedConfigUnion
 
 # Type alias for message builder functions.
 MessageBuilderFunction = Callable[[Dict[str, Any], str], Tuple[str, str]]
@@ -140,14 +142,14 @@ load_functions: Dict[str, LoadFunction] = {
 
 
 def load_data(
-    job_config: Dict[str, Any],
-    file_path: str,
+    job_config: ValidatedConfigUnion,
+    file_path: Path,
     message_builder: MessageBuilderFunction = None,
 ) -> str:
     """Performs the load operation, looking up the correct function in load_functions.
 
     Args:
-        job_config: The nested job configuration dictionary.
+        job_config: The (validated) nested job configuration dictionary.
         file_path: The path to the file to be loaded.
         message_builder: Optional custom message builder function for email defined in DIE main.py.
 

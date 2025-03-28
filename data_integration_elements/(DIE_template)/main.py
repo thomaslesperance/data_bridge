@@ -80,59 +80,48 @@ def main() -> None:
     Top-level execution function. Handles setup and run phases,
     and performs top-level exception logging.
     """
-
-    die_instance: Optional[DIE] = None
-    job_name: str = "UnknownJob"  # Default for logging if name determination fails
-
     try:
         # --- Phase 1: Setup ---
         try:
             job_name = Path(__file__).resolve().parent.name.replace("DIE_", "")
             if not job_name:
-                sys.stderr.write(
-                    "FATAL: Could not determine job name from directory structure.\n"
-                )
                 raise ValueError(
                     "Could not determine job name from directory structure."
                 )
 
-            die_instance = setup_and_get_die(
+            die_instance: DIE = setup_and_get_die(
                 job_name=job_name,
                 custom_transform=custom_transform_function,
                 message_builder=message_builder_function,
             )
 
         except Exception as setup_error:
-            # Check if logging was successfully configured during setup attempt
+            # Check if logging was configured before error occured
             if logging.getLogger().hasHandlers():
                 logging.exception(
-                    f"FATAL ERROR during setup phase for job '{job_name}'"
+                    f"Error during setup phase for job '{job_name}' (logging was not configured):\n{setup_error}; "
                 )
             else:
-                # Fallback to stderr if logging setup failed
                 sys.stderr.write(
-                    f"FATAL ERROR during setup phase for job '{job_name}': {setup_error}\n"
+                    f"Error during setup phase for job '{job_name}' (logging was configured):\n{setup_error}; "
                 )
-                # Print traceback to stderr here for setup errors when logging failed
                 import traceback
 
                 traceback.print_exc(file=sys.stderr)
-
-            # Re-raise the exception to prevent attempting the run phase
             raise setup_error
 
         # --- Phase 2: Run ---
-        # Only proceed if setup was successful (die_instance is not None)
         if die_instance:
             try:
                 die_instance.run()
 
             except Exception as run_error:
-                logging.exception(f"FATAL ERROR during run phase for job '{job_name}'")
+                logging.exception(
+                    f"Error during run phase for job '{job_name}:\n{run_error}'"
+                )
                 raise run_error
 
     except Exception:
-        # Ensures any unhandled exception from setup or run phases result in a non-zero exit code
         sys.exit(1)
 
     sys.exit(0)

@@ -2,38 +2,39 @@ import jaydebeapi
 import logging
 from pathlib import Path
 from typing import List, Tuple, Dict, Union, Any
+from utils.models import ValidatedConfigUnion
 
 
-def connect_to_db(job_config: Dict[str, Any]) -> jaydebeapi.Connection:
+def connect_to_db(job_config: ValidatedConfigUnion) -> jaydebeapi.Connection:
     """
     Connects to the database using the provided job configuration.
 
     Args:
-        job_config: The nested job configuration dictionary.
+        job_config: The (validated) nested job configuration dictionary.
 
     Returns:
         The database connection object.
     """
-    source_config = job_config["source"]
+    source_config = job_config.source
 
     try:
         return jaydebeapi.connect(
-            source_config.get("driver_name"),
-            source_config.get("conn_string"),
-            [source_config.get("user"), source_config.get("password")],
-            source_config.get("driver_file"),
+            source_config.driver_name,
+            source_config.conn_string,
+            [source_config.user, source_config.password],
+            source_config.driver_file,
         )
 
     except Exception as e:
         raise Exception(f"Failed to connect to database: {e}")
 
 
-def load_query(query_file_path: Union[str, Path]) -> str:
+def load_query(query_file_path: Path) -> str:
     """
     Loads the SQL query from the specified file.
 
     Args:
-        query_file_path: The path to the SQL query file (str or Path).
+        query_file_path: The path to the SQL query file Path.
 
     Returns:
         The SQL query as a string.
@@ -46,9 +47,9 @@ def load_query(query_file_path: Union[str, Path]) -> str:
             query = f.read()
         return query
     except FileNotFoundError:
-        raise FileNotFoundError(f"Query file not found: {query_file_path}")
+        raise FileNotFoundError(f"Query file not found: {str(query_file_path)}")
     except Exception as e:
-        raise Exception(f"Failed to load query from file: {query_file_path}")
+        raise Exception(f"Failed to load query from file: {str(query_file_path)}")
 
 
 def query_db(
@@ -76,7 +77,7 @@ def query_db(
 
 
 def extract_data(
-    job_config: Dict[str, Any], query_file_path: Union[str, Path]
+    job_config: ValidatedConfigUnion, query_file_path: Path
 ) -> Tuple[List[str], List[Tuple[Any, ...]]]:
     """
     Extracts data from the database specified in the job configuration.
@@ -91,9 +92,7 @@ def extract_data(
     """
     try:
         with connect_to_db(job_config) as db_connection:
-            logging.info(
-                f"Connected to {job_config['source']['source_name']} database."
-            )
+            logging.info(f"Connected to {job_config.source.source_name} database.")
             query = load_query(query_file_path)
             header, data = query_db(db_connection, query)
             logging.info(f"Data retrieved from database")
