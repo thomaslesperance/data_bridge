@@ -1,4 +1,4 @@
-from typing import List, Union, Literal
+from typing import List, Union, Literal, Any
 from pydantic import (
     BaseModel,
     FilePath,
@@ -6,6 +6,8 @@ from pydantic import (
     SecretStr,
     EmailStr,
     field_validator,
+    model_validator,
+    ValidationInfo,
 )
 from pathlib import Path
 
@@ -49,7 +51,25 @@ class SourceSkyward(BaseModel):
     password: SecretStr
     conn_string: SecretStr
     driver_name: str
-    driver_file: FilePath
+    driver_file: str
+
+    # Allows passing context to disable this check on driver_file field; for use in config file
+    # validation outside pipeline context
+    @model_validator(mode="after")
+    def check_driver_file_exists(self, info: ValidationInfo) -> "SourceSkyward":
+        context = info.context or {}
+        skip_check = context.get("skip_path_existence_check", False)
+
+        if not skip_check:
+            config_dir = context.get("config_dir", Path("."))
+            resolved_path = (config_dir / self.driver_file).resolve()
+
+            if not resolved_path.is_file():
+                raise ValueError(
+                    f"driver_file path does not point to a file: '{resolved_path}' (checking enabled)"
+                )
+
+        return self
 
 
 # ------------------- SHARED DESTINATION MODELS -------------------
@@ -57,22 +77,41 @@ class BaseSharedDest(BaseModel):
     """Base model for shared destination configurations."""
 
     shared_dest_name: str  # Added dynamically from config.ini section name
-    protocol: str
+    protocol: str  # Strings must match keys in load_functions map in load.py
 
 
 class SharedDestSmtp(BaseSharedDest):
     """Configuration specific to shared SMTP destinations."""
 
     shared_dest_name: Literal["internal_smtp"]
+    protocol: Literal[
+        "smtp"
+    ]  # Strings must match keys in load_functions map in load.py
     host: str
     port: int = 25
 
 
 class SharedDestFileshare(BaseSharedDest):
-    """Configuration specific to shared Fileshare destinations."""
+    """Configuration specific to shared fileshare destinations."""
 
     shared_dest_name: Literal["skyward_exports"]
-    mount_path: DirectoryPath
+    protocol: Literal[
+        "fileshare"
+    ]  # Strings must match keys in load_functions map in load.py
+    mount_path: str
+
+    @model_validator(mode="after")
+    def check_mount_path_exists(self, info: ValidationInfo) -> "SharedDestFileshare":
+        context = info.context or {}
+        skip_check = context.get("skip_path_existence_check", False)
+
+        if not skip_check:
+            path_to_check = Path(self.mount_path)
+            if not path_to_check.is_dir():
+                raise ValueError(
+                    f"mount_path does not point to a directory: '{self.mount_path}' (checking enabled)"
+                )
+        return self
 
 
 # ------------------- JOB SECTION MODELS --------------------------
@@ -84,17 +123,37 @@ class BaseJob(BaseModel):
     is_shared_destination: bool
     base_filename: str
 
+    # Since subclasses of this class specify a Literal choice of this field, manual coercion
+    # needs to happen first before the raw string is matched to the subclass or errors occur
+    @field_validator("is_shared_destination", mode="before")
+    @classmethod
+    def coerce_string_to_bool(cls, v: Any) -> bool:
+        """Coerce 'true'/'false' strings to boolean before standard validation."""
+        if isinstance(v, str):
+            v_lower = v.strip().lower()
+            if v_lower in ("true", "yes", "1", "on"):
+                return True
+            elif v_lower in ("false", "no", "0", "off"):
+                return False
+            else:
+                raise ValueError(f"Invalid boolean string: '{v}'")
+        return v
+
 
 # --- Jobs loading to unique destinations ---
 class BaseJobUniqueDest(BaseJob):
-    protocol: str
+    """Common INI section details for unique SFTP destinations."""
+
+    is_shared_destination: Literal[False]
+    protocol: str  # Strings must match keys in load_functions map in load.py
 
 
 class JobUniqueSftp(BaseJobUniqueDest):
     """<job_name> INI section details for unique SFTP destinations."""
 
-    is_shared_destination: Literal[False]
-    protocol: Literal["sftp"]
+    protocol: Literal[
+        "sftp"
+    ]  # Strings must match keys in load_functions map in load.py
     host: str
     user: str
     password: SecretStr

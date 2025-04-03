@@ -45,13 +45,13 @@ def main():
     )
     parser.add_argument(
         "job_name",
-        help="The name of the new DIE (without the 'DIE_' prefix).\nMust exactly match what the corresponding entry in the config.ini file.",
+        help="The name of the new DIE (without the 'DIE_' prefix).\nMust exactly match the corresponding entry in the config.ini file for this job.",
     )
     args = parser.parse_args()
 
-    script_dir = Path(__file__).resolve().parent
-    template_dir = script_dir / "(DIE_template)"
-    destination_dir = script_dir
+    project_root = Path(__file__).resolve().parent.parent
+    template_dir = project_root / "data_integration_elements" / "(DIE_template)"
+    destination_dir = template_dir.parent
 
     if not template_dir.is_dir():
         print(f"Error: Template directory not found: {template_dir}")

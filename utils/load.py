@@ -4,10 +4,15 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import COMMASPACE, formatdate
 import logging
+import paramiko
 import os
 from typing import Dict, Callable, Any, Tuple, Union
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from utils.models import ValidatedConfigUnion
+
+# ------------------------------------------------------------------------------------------
+# -------------------------------- TYPE ALIASES --------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 # Type alias for message builder functions
 MessageBuilderFunction = Callable[[ValidatedConfigUnion, Path], Tuple[str, str]]
@@ -16,6 +21,10 @@ MessageBuilderFunction = Callable[[ValidatedConfigUnion, Path], Tuple[str, str]]
 LoadFunction = Callable[
     [ValidatedConfigUnion, Path, Union[MessageBuilderFunction, None]], str
 ]
+
+# ------------------------------------------------------------------------------------------
+# -------------------------------- SMTP ----------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 
 def prepare_email(
@@ -127,10 +136,234 @@ def send_email_with_smtp(
         raise Exception(f"An unexpected error occurred: {e}")
 
 
+# ------------------------------------------------------------------------------------------
+# -------------------------------- SFTP ----------------------------------------------------
+# ------------------------------------------------------------------------------------------
+
+
+def sftp_upload_minimal(
+    hostname: str,
+    port: int,
+    username: str,
+    password: str,
+    local_filepath: Path,
+    remote_directory: str,
+    disable_host_key_check: bool = False,
+) -> str:
+    """
+    Connects to an SFTP server using password authentication and uploads a single file.
+    Handles basic connection and transfer operations.
+
+    Args:
+        hostname: Server hostname or IP address.
+        port: Server port (usually 22 for SFTP).
+        username: SFTP username.
+        password: SFTP password (plain string).
+        local_filepath: Path object for the local file to upload.
+        remote_directory: The remote directory path where the file should be placed.
+                          The base filename from local_filepath will be appended.
+        disable_host_key_check: If True, skips host key verification.
+                                **SECURITY RISK**: Only use for trusted networks or testing.
+
+    Returns:
+        A string confirming successful upload and the remote path.
+
+    Raises:
+        FileNotFoundError: If the local file does not exist.
+        paramiko.AuthenticationException: If authentication fails (bad user/pass).
+        paramiko.SSHException: For other SSH/SFTP connection errors (e.g., host down,
+                                host key mismatch if checks enabled).
+        IOError: For file transfer errors (e.g., permission denied on server).
+    """
+    # Construct remote path reliably complying with posixpath (forward slashes)
+    remote_filename = local_filepath.name
+    remote_full_path = PurePosixPath(remote_directory) / remote_filename
+
+    logging.info(
+        f"Attempting SFTP upload (Password Auth): {local_filepath} -> "
+        f"sftp://{username}@{hostname}:{port}{remote_full_path if remote_full_path.startswith('/') else '/' + remote_full_path}"
+    )
+
+    client = None
+    sftp = None
+    try:
+        client = paramiko.SSHClient()
+
+        # --- Host key check
+        if disable_host_key_check:
+            # Warning:
+            # AutoAddPolicy bypasses host key verification entirely. This means you
+            # have NO protection against Man-In-The-Middle (MITM) attacks if the
+            # server's key is unknown. An attacker could intercept the connection.
+            # ONLY use this for initial testing on completely trusted networks
+            # where you understand and accept the risk.
+            logging.warning(
+                "!!! SECURITY ALERT !!! Disabling SFTP host key verification using AutoAddPolicy. Vulnerable to MITM attacks."
+            )
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        else:
+            # Default, more secure behavior: Load system known host keys.
+            # This will RAISE an SSHException if the host is unknown or the key
+            # has changed (indicating potential MITM or server change).
+            # Ensure your ~/.ssh/known_hosts file (or equivalent) is correct.
+            logging.info("Loading system host keys for SFTP verification.")
+            client.load_system_host_keys()
+
+        logging.info(f"Connecting via SSH to {hostname}:{port} as user '{username}'...")
+        client.connect(
+            hostname=hostname,
+            port=port,
+            username=username,
+            password=password,
+            timeout=20,
+            auth_timeout=20,
+            # Disable looking for keys explicitly since we only want password auth here
+            key_filename=None,
+            look_for_keys=False,
+        )
+        logging.info("SSH connection established successfully.")
+
+        sftp = client.open_sftp()
+        logging.info("SFTP session opened over SSH connection.")
+        logging.info(
+            f"Uploading {local_filepath.name} via SFTP to remote path: {remote_full_path}"
+        )
+        sftp.put(str(local_filepath), remote_full_path)
+        logging.info("SFTP upload completed successfully.")
+
+        success_message = (
+            f"Successfully uploaded {local_filepath.name} to "
+            f"sftp://{hostname}:{port}{remote_full_path if remote_full_path.startswith('/') else '/' + remote_full_path}"
+        )
+        return success_message
+
+    except paramiko.AuthenticationException:
+        raise paramiko.AuthenticationException(
+            f"SFTP Authentication failed for user '{username}' on {hostname}:{port}."
+        )
+    except paramiko.SSHException as ssh_err:
+        # Covers various connection errors, including host key mismatches
+        raise paramiko.SSHException(
+            f"SSH connection or protocol error connecting to {hostname}:{port}. Error: {ssh_err}"
+        )
+    except IOError as io_err:
+        # Covers errors during the actual file transfer (permissions, disk space etc.)
+        raise IOError(
+            f"SFTP file transfer IO error for remote path {remote_full_path}. Error: {io_err}"
+        )
+        raise
+    except Exception as e:
+        raise Exception(
+            f"An unexpected error occurred during SFTP operation to {hostname}. Error: {e}",
+            exc_info=True,
+        )
+    finally:
+        if sftp is not None:
+            try:
+                logging.info("Closing SFTP session.")
+                sftp.close()
+            except Exception as e_close:
+                logging.warning(
+                    f"Error closing SFTP session: {e_close}", exc_info=False
+                )
+        if client is not None:
+            try:
+                logging.info("Closing SSH client connection.")
+                client.close()
+            except Exception as e_close:
+                logging.warning(
+                    f"Error closing SSH client connection: {e_close}", exc_info=False
+                )
+
+
+def transfer_file_with_sftp(
+    config: ValidatedConfigUnion,
+    local_file_path: Path,
+) -> str:
+    """
+    Pipeline load function for SFTP uploads using Password Authentication.
+
+    Conforms to the LoadFunction type alias. Extracts SFTP details from the
+    validated config object and calls the core SFTP worker function.
+    Designed to be extended later to read config flags from the config object for
+    key-auth, host key checks etc.
+
+    Args:
+        config: The validated configuration object for the job. Expected to
+                contain a 'job' attribute of type JobUniqueSftp.
+        local_file_path: Path object for the local file to upload.
+
+    Returns:
+        A success message string from the SFTP upload worker function.
+
+    Raises:
+        TypeError: If the config object does not contain the expected structure
+                   (e.g., ValidatedConfigUnique with JobUniqueSftp).
+        ValueError: If essential SFTP configuration is missing within the job config
+                    (though Pydantic validation should prevent this).
+        (and any exceptions raised by sftp_upload_minimal like FileNotFoundError,
+         AuthenticationException, SSHException, IOError)
+    """
+    logging.info(
+        f"Initiating SFTP load via pipeline function for local file: {local_file_path}"
+    )
+
+    # Extract parameters
+    job_config = config.job
+    hostname = job_config.host
+    port = job_config.port
+    username = job_config.user
+    password = job_config.password.get_secret_value()
+    remote_directory = job_config.remote_path
+
+    # --- Future security enhancements
+    # Here, you would check for additional flags in job_config if they existed, e.g.:
+    # use_key_auth = getattr(job_config, 'use_key_auth', False)
+    # pkey_path = getattr(job_config, 'private_key_path', None)
+    # strict_host_keys = getattr(job_config, 'strict_host_key_check', True) # Default to strict
+    #
+    # if use_key_auth and pkey_path:
+    #     # Call a different worker function or pass key info to an enhanced sftp_upload
+    #     log.info("Attempting SFTP transfer using key-based authentication...")
+    #     # result_message = sftp_upload_with_key(...)
+    # else:
+    #     # Continue with password auth worker call
+    #     log.info("Using password-based authentication for SFTP.")
+    #     result_message = sftp_upload_minimal(...)
+    #
+    # The 'disable_host_key_check' flag for the worker would be set based on 'strict_host_keys'
+    # disable_host_key_check_param = not strict_host_keys # Inverse relationship
+    # then disable_host_key_check_param would be passed to the worker call for disable_host_key_check
+
+    # --- Call the core worker function
+    logging.info("Calling minimal SFTP upload worker with password authentication.")
+    try:
+        result_message = sftp_upload_minimal(
+            hostname=hostname,
+            port=port,
+            username=username,
+            password=password,
+            local_filepath=local_file_path,
+            remote_directory=remote_directory,
+            disable_host_key_check=True,  # Can change this once config file template updated to use added security
+        )
+
+        return result_message
+
+    except Exception as e:
+        raise Exception(
+            f"SFTP load function failed during transfer for job '{job_config.job_name}'. Error Type: {type(e).__name__}"
+        )
+
+
+# ------------------------------------------------------------------------------------------
+# -------------------------------- MAP & MAIN LOADER ---------------------------------------
+# ------------------------------------------------------------------------------------------
+
 # --- Dict for choosing correct load functions corresponding to config.ini details---
 load_functions: Dict[str, LoadFunction] = {
     "smtp": send_email_with_smtp,
-    # "sftp": transfer_file_with_sftp,
+    "sftp": transfer_file_with_sftp,
     # "fileshare": transfer_file_to_share,
     # Add more load functions here for other data transfer methods as needed
 }
@@ -158,7 +391,7 @@ def load_data(
         # Ensure transformed data present for loading
         if not file_path.is_file():
             raise FileNotFoundError(
-                f"""Transformed data file not found for loading: {file_path or 'None'}"""
+                f"Transformed data file not found for loading: {file_path or 'None'}"
             )
 
         # Determine load protocol for job
@@ -169,7 +402,7 @@ def load_data(
         else:
             load_protocol = job_config.job.protocol
 
-        # Select corresponding load function
+        # Select and run corresponding load function
         if load_protocol in load_functions:
             load_function: LoadFunction = load_functions[load_protocol]
             result = load_function(job_config, file_path, message_builder)
