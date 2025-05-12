@@ -5,7 +5,8 @@ import logging
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from utils.die import DIE, setup_and_get_die  # Class imported only for type hints
+from utils.die import DIE  # Class imported only for type hints
+from utils.setup import setup_and_get_die
 from utils.transform import (
     export_csv_from_data,
 )  # Or any others needed to build custom transform functions as needed
@@ -101,8 +102,8 @@ def main() -> None:
 
             die_instance: DIE = setup_and_get_die(
                 job_name=job_name,
-                custom_transform=custom_transform_function,
-                message_builder=message_builder_function,
+                custom_transform_fn=custom_transform_function,
+                message_builder_fn=message_builder_function,
             )
 
         except Exception as setup_error:
