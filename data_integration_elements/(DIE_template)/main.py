@@ -5,57 +5,135 @@ import logging
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from utils.extract import extract_data
-from utils.transform import transform_data
-from utils.load import load_data
-from utils.config import (
-    load_config,
-    get_job_config,
-    determine_output_filename,
-    configure_logging,
-    locate,
-)
+from utils.die import DIE  # Class imported only for type hints
+from utils.setup import setup_and_get_die
+from utils.transform import (
+    export_csv_from_data,
+)  # Or any others needed to build custom transform functions as needed
+from utils.models import ValidatedConfigUnion
+from utils.transform import CustomTransformFunction
+from utils.load import MessageBuilderFunction
+from typing import (
+    List,
+    Tuple,
+    Any,
+    Dict,
+    Optional,
+    Callable,
+)  # Kept unused type imports for cases where custom transform functions defined
+
+# ----------------------------------------------------------------------------------------------- #
+# ---------------------------CONFIGURE JOB-SPECIFIC LOGIC HERE----------------------------------- #
+# ----------------------------------------------------------------------------------------------- #
+# --- Define custom transform function(s) (if any) for THIS JOB ---
+#     Uncomment and complete custom function(s) below
+#     Otherwise, job defaults to basic CSV export function in utils
+#     Extract and load functions are chosen based on required job settings in config.ini
+# ----------------------------------------------------------------------------------------------- #
+
+# ----------------------------------------------------------------------------------------------- #
+# --- For jobs that send an email (with a CSV): ------------------------------------------------- #
+# ----------------------------------------------------------------------------------------------- #
+# def message_builder(
+#   job_config: ValidatedConfigUnion,
+#   file_path: Path
+# ) -> Tuple[str, str]:
+#     """
+#     Assembles the custom email associated with job.
+
+#     Args:
+#         job_config: The combined, nested job configuration dictionary.
+#         file_path: The path to the attachment of the email, in case dynamic text
+#                     based on it is needed.
+
+#     Returns:
+#         A tuple containing the customized email subect and body text.
+#     """
+#     subject = "Example Email for <job_name> Integration"
+#     body = "This is a test email <job_name> job, which sends an email."
+#     return subject, body
+# ----------------------------------------------------------------------------------------------- #
+# ----------------------------------------------------------------------------------------------- #
+
+message_builder_function: Optional[MessageBuilderFunction] = None
+
+# ----------------------------------------------------------------------------------------------- #
+# --- For jobs that modify the CSV file or have more advanced procedures: ----------------------- #
+# ----------------------------------------------------------------------------------------------- #
+# def custom_transform(
+#   header: List[str],
+#   data:  List[Tuple[Any,...]],
+#   intermediate_file_path: Path
+# ) -> Path:
+#     """
+#     Performs the customized data transformation(s) unique to this DIE.
+
+#     Args:
+#         header: The first row of fields containing the untransformed data headers.
+#         data: The rows of untransformed data.
+#         intermediate_file_path: The path where the transformed data should be stored before loading.
+
+#     Returns:
+#         The file path to the completed and transformed data, ready to be loaded.
+#     """
+#     # ... execute any needed preparatory logic
+#     intermediate_file = export_csv_from_tuple_array(header, data, intermediate_file_path)
+#     # ... apply transformations to intermediate_file and store in transformed_file
+#     return transformed_file
+# ----------------------------------------------------------------------------------------------- #
+# ----------------------------------------------------------------------------------------------- #
+
+custom_transform_function: Optional[CustomTransformFunction] = None
 
 
-def main():
-    # | --- Initialize ---
-    job_name = Path(__file__).resolve().parent.name.replace("DIE_", "")
-    paths = locate(job_name)
-    if not all(paths.values()):
-        print("Error")
+def main() -> None:
+    """
+    Top-level execution function. Handles setup and run phases,
+    and performs top-level exception logging.
+    """
+    try:
+        # --- Phase 1: Setup ---
+        try:
+            job_name = Path(__file__).resolve().parent.name.replace("DIE_", "")
+            if not job_name:
+                raise ValueError(
+                    "Could not determine job name from directory structure."
+                )
+
+            die_instance: DIE = setup_and_get_die(
+                job_name=job_name,
+                custom_transform_fn=custom_transform_function,
+                message_builder_fn=message_builder_function,
+            )
+
+        except Exception as setup_error:
+            # Check if logging was configured before error occured
+            if logging.getLogger().hasHandlers():
+                logging.exception(
+                    f"Error during setup phase (logging was not configured):\n{setup_error}; "
+                )
+            else:
+                sys.stderr.write(
+                    f"Error during setup phase (logging was configured):\n{setup_error}; "
+                )
+                import traceback
+
+                traceback.print_exc(file=sys.stderr)
+            raise setup_error
+
+        # --- Phase 2: Run ---
+        if die_instance:
+            try:
+                die_instance.run()
+
+            except Exception as run_error:
+                logging.exception(f"Error during run phase:\n{run_error}'")
+                raise run_error
+
+    except Exception:
         sys.exit(1)
 
-    config = load_config(paths["config_file_path"])
-    job_config = get_job_config(config, job_name, paths["config_dir"])
-
-    Path(paths["output_dir"]).mkdir(parents=True, exist_ok=True)
-    configure_logging(paths["log_file_path"])
-    logging.info(f"Starting data integration for job: {job_name}")
-
-    intermediate_filename = determine_output_filename(job_config, job_name)
-    intermediate_file_path = Path(paths["output_dir"]) / intermediate_filename
-
-    try:
-        # | --- Extract ---
-        header, data = extract_data(job_config, paths["query_file_path"])
-        logging.info(
-            f"SUCCESS: Data extracted from {job_config['source']['source_name']} database."
-        )
-
-        # | --- Transform ---
-        transformed_data_file_path = transform_data(
-            job_config, (header, data), str(intermediate_file_path)
-        )
-        logging.info(
-            f"SUCCESS: Data transformed and saved to {transformed_data_file_path}"
-        )
-
-        # | --- Load ---
-        response = load_data(job_config, str(transformed_data_file_path))
-        logging.info(f"SUCCESS: Data loaded.\n\nDestination response: {response}")
-
-    except Exception as e:
-        logging.exception(f"An error occurred in job {job_name}: {e}")
+    sys.exit(0)
 
 
 if __name__ == "__main__":

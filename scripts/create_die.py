@@ -3,9 +3,18 @@ import shutil
 import argparse
 
 
-def create_new_die(job_name: str, template_dir: Path, destination_dir: Path):
-    """Creates a new DIE directory based on the template files."""
+def create_new_die(job_name: str, template_dir: Path, destination_dir: Path) -> None:
+    """
+    Creates a new DIE directory based on the template files.
 
+    Args:
+        job_name: The name of the new DIE (without the 'DIE_' prefix on the job directory).
+        template_dir: The path to the directory containing the DIE template files (i.e., main.py and query.sql).
+        destination_dir: The parent directory of the new DIE directory.
+
+    Raises:
+        OSError: If shutil could not copy template directory tree to specified location.
+    """
     new_die_path = destination_dir / f"DIE_{job_name}"
 
     if new_die_path.exists():
@@ -27,18 +36,22 @@ def create_new_die(job_name: str, template_dir: Path, destination_dir: Path):
 
 
 def main():
+    """
+    Parses arguments passed to this script, and calls the helper function with the
+    provided command line arg.
+    """
     parser = argparse.ArgumentParser(
         description="Create a new Data Integration Element (DIE)."
     )
     parser.add_argument(
         "job_name",
-        help="The name of the new DIE (without the 'DIE_' prefix).\nMust exactly match what the corresponding entry in the config.ini file.",
+        help="The name of the new DIE (without the 'DIE_' prefix).\nMust exactly match the corresponding entry in the config.ini file for this job.",
     )
     args = parser.parse_args()
 
-    script_dir = Path(__file__).resolve().parent
-    template_dir = script_dir / "(DIE_template)"
-    destination_dir = script_dir
+    project_root = Path(__file__).resolve().parent.parent
+    template_dir = project_root / "data_integration_elements" / "(DIE_template)"
+    destination_dir = template_dir.parent
 
     if not template_dir.is_dir():
         print(f"Error: Template directory not found: {template_dir}")
