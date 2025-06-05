@@ -8,15 +8,14 @@ version = "0.0.1"
 authors = [
     { name = "Thomas L'Esperance", email = "tmles2023@gmail.com" },
 ]
-description = "A data integration pipeline capable of integrating data between multiple sources and multiple destinations. The project 
-features pandas for custom data transformations to be added to each integration element and pydantic for config file validation."
+description = "A data integration pipeline capable of integrating data between multiple sources and multiple destinations. The project features pandas for custom data transformations to be added to each integration element and pydantic for config file validation."
 readme = "README.md"
 requires-python = "~=3.13"
 dependencies = [
-    "pytz~=2025.1",
-    "pydantic>=2.10.6,<3.0",
-    "JayDeBeApi>=1.2.3,<1.3",
-    "paramiko>=3.5.1,<4.0",
+    "pytz~=2025.2",
+    "pydantic~=2.11.5",
+    "JayDeBeApi~=1.2.3",
+    "paramiko~=3.5.1",
     "pandas~=2.3.0",
     "pysftp~=0.2.9"
 ]

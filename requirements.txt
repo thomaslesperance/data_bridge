@@ -3,6 +3,7 @@ bcrypt==4.3.0
 build==1.2.2.post1
 cffi==1.17.1
 cryptography==45.0.3
+-e git+https://github.com/thomaslesperance/data_bridge.git@e92db549b2316844fb5e71f5cefe0d4e622aa59f#egg=data_bridge
 JayDeBeApi==1.2.3
 jpype1==1.5.2
 numpy==2.2.6
@@ -17,7 +18,6 @@ pyproject_hooks==1.2.0
 pysftp==0.2.9
 python-dateutil==2.9.0.post0
 pytz==2025.2
-setuptools==80.9.0
 six==1.17.0
 typing-inspection==0.4.1
 typing_extensions==4.14.0
