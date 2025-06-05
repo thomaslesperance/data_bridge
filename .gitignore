@@ -6,4 +6,6 @@ config.py
 data_integration_elements/DIE_*/
 test/
 venv/
+dist/
+*.egg-info/
 .DS_STORE
