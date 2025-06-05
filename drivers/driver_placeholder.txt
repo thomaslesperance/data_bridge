@@ -1,0 +1,2 @@
+Replace this file with needed drivers that aren't available in CLASSPATH environment variable
+or if you don't wan to use CLASSPATH.
