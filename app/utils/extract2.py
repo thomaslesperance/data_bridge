@@ -1,9 +1,6 @@
-from app.utils.models import ValidatedConfigUnion
-
-
 class Extractor:
 
-    def __init__(self, sources, extract_config):
+    def __init__(self, validated_sources, validated_extract_config):
         self.source_method_map = {
             "db1": self._sql_extract,
             "db2": self._sql_extract,
@@ -11,9 +8,6 @@ class Extractor:
             "google_drive_account": self._drive_extract,
             "sftp_server": self._sftp_extract,
         }
-
-        validated_sources = ValidatedConfigUnion.model_validate(sources)
-        validated_extract_config = ValidatedConfigUnion.model_validate(extract_config)
 
         self.extract_tasks = []
 
@@ -51,6 +45,7 @@ class Extractor:
         print("Some stuff")
 
     def extract(self):
+        # Will use pandas df
         data = {}
         for extract_task in self.extract_tasks:
             method = extract_task["method"]
@@ -60,4 +55,4 @@ class Extractor:
             data[f"{extract_task["source_name"]}__{extract_task["dependency"]}"] = (
                 data_frame
             )
-        return data
+        self.data = data
