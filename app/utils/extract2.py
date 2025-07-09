@@ -1,6 +1,9 @@
+from models import PipelineData
+
+
 class Extractor:
 
-    def __init__(self, validated_sources, validated_extract_config):
+    def __init__(self, sources, extract_config):
         self.source_method_map = {
             "db1": self._sql_extract,
             "db2": self._sql_extract,
@@ -12,19 +15,19 @@ class Extractor:
         self.extract_tasks = []
 
         # extract_tasks = [{"source_name": source_name, "source_config": source_dict, "method": extract_method_ref, "dependency": extract_dependency_path}, ...]
-        for source_name, extract_dependencies in validated_extract_config.items():
+        for source_name, extract_dependencies in extract_config.items():
             if isinstance(extract_dependencies, list):
                 for dependency in extract_dependencies:
                     extract_task = {}
                     extract_task["source_name"] = source_name
-                    extract_task["source_config"] = validated_sources[source_name]
+                    extract_task["source_config"] = sources[source_name]
                     extract_task["method"] = self.source_method_map[source_name]
                     extract_task["dependency"] = dependency
                     self.extract_tasks.append(extract_task)
             elif isinstance(extract_dependencies, str):
                 extract_task = {}
                 extract_task["source_name"] = source_name
-                extract_task["source_config"] = validated_sources[source_name]
+                extract_task["source_config"] = sources[source_name]
                 extract_task["method"] = self.source_method_map[source_name]
                 extract_task["dependency"] = extract_dependencies
                 self.extract_tasks.append(extract_task)
@@ -45,7 +48,8 @@ class Extractor:
         print("Some stuff")
 
     def extract(self):
-        # Will use pandas df
+        # TODO: This needs to return a flat dict of PipelineData objects where:
+        # key=extraxt dependency query.sql and value=PipelineData object
         data = {}
         for extract_task in self.extract_tasks:
             method = extract_task["method"]
@@ -55,4 +59,4 @@ class Extractor:
             data[f"{extract_task["source_name"]}__{extract_task["dependency"]}"] = (
                 data_frame
             )
-        self.data = data
+        return PipelineData(data)

@@ -1,28 +1,33 @@
 from pathlib import Path
-from utils.data_stream import Data_Stream
+from utils.models import TransformFunc, EmailFunc
+from utils.data_stream import DataStream
 from config import sources, destinations, jobs, PROJECT_LOG_FILE
 
-transform_fn = (
-    "Define job-specific transform function of standardized signature (use pandas!)"
-)
-email_msg = "Define email builder function of standardized signature"
+# Define job-specific transformation logic or email message builder
+transform_fn: TransformFunc | None = None
+email_fn: EmailFunc | None = None
 
 
 def main():
-
-    job_name = Path(__file__).resolve().parent.name.replace("DIE_", "")
-
-    die = Data_Stream(
+    job_name = Path(__file__).resolve().parent.name
+    data_stream = DataStream(
         job_name=job_name,
-        sources=sources,
-        destinations=destinations,
+        avail_sources=sources,
+        avail_destinations=destinations,
         job=jobs[job_name],
         transform_fn=transform_fn,
-        email_msg=email_msg,
+        email_fn=email_fn,
         log_file=PROJECT_LOG_FILE,
     )
-    die.run()
+    data_stream.run()
 
 
 if __name__ == "__main__":
     main()
+
+
+# TODO:
+# 1. Pydantic models
+# 2. Logging system (find popular lightweight library; intelligent format)
+# 3. Migrate jobs one-by-one
+#     --Extract/load methods as needed

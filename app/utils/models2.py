@@ -1,303 +1,184 @@
-from typing import List, Union, Literal, Any
-from pydantic import (
-    BaseModel,
-    FilePath,
-    DirectoryPath,
-    SecretStr,
-    EmailStr,
-    field_validator,
-    model_validator,
-    ValidationInfo,
-)
+import io
+import pandas as pd
 from pathlib import Path
+from typing import Annotated, Union, Literal, Dict, List, Callable
+from pydantic import BaseModel, Secret, EmailStr, Field, model_validator
+from datetime import datetime
+from email.message import Message
 
 
-# ------------------------------------------------------------------------------------------
-# -------------------------------- HELPER FUNCTIONS ----------------------------------------
-# ------------------------------------------------------------------------------------------
-# For email recipient lists
-def parse_comma_separated_str(value: str) -> List[str]:
-    """
-    Parses a non-empty comma-separated string into a list of non-empty, stripped strings.
-
-    Args:
-        value: Comma-separated string.
-
-    Returns:
-        A non-empty list of non-empty, stripped strings.
-
-    Raises:
-        ValueError: If input isn't a string or results in an empty list.
-    """
-    if not isinstance(value, str):
-        raise ValueError("Input must be a string.")
-    parsed = [item.strip() for item in value.split(",") if item.strip()]
-    if not parsed:
-        raise ValueError("Input must contain at least one non-empty value.")
-    return parsed
+# ------------------------------------------------------------------------
+# ------------------- CONFIGURATION STATE MODELS -------------------------
+# ------------------------------------------------------------------------
 
 
-# ------------------------------------------------------------------------------------------
-# -------------------------------- CONFIG MODELS -------------------------------------------
-# ------------------------------------------------------------------------------------------
-
-
-# ------------------- DATA SOURCE MODELS -------------------
-class SourceSkyward(BaseModel):
-    """Base model for data source configurations."""
-
-    source_name: str  # Added dynamically from config.ini section name
-    user: str
-    password: SecretStr
-    conn_string: SecretStr
+# ------------------- DATA SOURCE MODELS ---------------------------------
+class SourceSql(BaseModel):
+    type: Literal["sql"]
+    user: Secret
+    password: Secret
+    conn_string: Secret
     driver_name: str
-    driver_file: str
-
-    # Allows passing context to disable this check on driver_file field; for use in config file
-    # validation outside pipeline context
-    @model_validator(mode="after")
-    def check_driver_file_exists(self, info: ValidationInfo) -> "SourceSkyward":
-        context = info.context or {}
-        skip_check = context.get("skip_path_existence_check", False)
-
-        if not skip_check:
-            config_dir = context.get("config_dir", Path("."))
-            resolved_path = (config_dir / self.driver_file).resolve()
-
-            if not resolved_path.is_file():
-                raise ValueError(
-                    f"driver_file path does not point to a file: '{resolved_path}' (checking enabled)"
-                )
-
-        return self
 
 
-# ------------------- SHARED DESTINATION MODELS -------------------
-class BaseSharedDest(BaseModel):
-    """Base model for shared destination configurations."""
-
-    shared_dest_name: str  # Added dynamically from config.ini section name
-    protocol: str  # Strings must match keys in load_functions map in load.py
-
-
-class SharedDestSmtp(BaseSharedDest):
-    """Configuration specific to shared SMTP destinations."""
-
-    shared_dest_name: Literal["internal_smtp"]
-    protocol: Literal[
-        "smtp"
-    ]  # Strings must match keys in load_functions map in load.py
-    host: str
-    port: int = 25
-
-
-class SharedDestFileshare(BaseSharedDest):
-    """Configuration specific to shared fileshare destinations."""
-
-    shared_dest_name: Literal["skyward_exports"]
-    protocol: Literal[
-        "fileshare"
-    ]  # Strings must match keys in load_functions map in load.py
+class SourceFileshare(BaseModel):
+    type: Literal["fileshare"]
     mount_path: str
 
     @model_validator(mode="after")
-    def check_mount_path_exists(self, info: ValidationInfo) -> "SharedDestFileshare":
-        context = info.context or {}
-        skip_check = context.get("skip_path_existence_check", False)
-
-        if not skip_check:
-            path_to_check = Path(self.mount_path)
-            if not path_to_check.is_dir():
-                raise ValueError(
-                    f"mount_path does not point to a directory: '{self.mount_path}' (checking enabled)"
-                )
+    def path_exists(self):
+        path_to_check = Path(self.mount_path)
+        if not path_to_check.is_dir():
+            raise ValueError(
+                f"mount_path for source fileshare does not point to a directory: {self.mount_path}"
+            )
         return self
 
 
-# ------------------- JOB SECTION MODELS --------------------------
-class BaseJob(BaseModel):
-    """Common fields parsed directly from a job's <job_name> INI section."""
+class SourceGoogleDrive(BaseModel):
+    type: Literal["google_drive"]
+    access_token: Path
 
-    job_name: str  # Added dynamically from config.ini section name
-    source: str
-    is_shared_destination: bool
-    base_filename: str
-
-    # Since subclasses of this class specify a Literal choice of this field, manual coercion
-    # needs to happen first before the raw string is matched to the subclass or errors occur
-    @field_validator("is_shared_destination", mode="before")
-    @classmethod
-    def coerce_string_to_bool(cls, v: Any) -> bool:
-        """Coerce 'true'/'false' strings to boolean before standard validation."""
-        if isinstance(v, str):
-            v_lower = v.strip().lower()
-            if v_lower in ("true", "yes", "1", "on"):
-                return True
-            elif v_lower in ("false", "no", "0", "off"):
-                return False
-            else:
-                raise ValueError(f"Invalid boolean string: '{v}'")
-        return v
+    @model_validator(mode="after")
+    def token_exists(self):
+        if not self.access_token.is_file():
+            raise ValueError(
+                f"access_token for Google Drive source does not point to a file: {self.access_token}"
+            )
+        return self
 
 
-# --- Jobs loading to unique destinations ---
-class BaseJobUniqueDest(BaseJob):
-    """Common INI section details for unique SFTP destinations."""
-
-    is_shared_destination: Literal[False]
-    protocol: str  # Strings must match keys in load_functions map in load.py
-
-
-class JobUniqueSftp(BaseJobUniqueDest):
-    """<job_name> INI section details for unique SFTP destinations."""
-
-    protocol: Literal[
-        "sftp"
-    ]  # Strings must match keys in load_functions map in load.py
+class SourceSftp(BaseModel):
+    type: Literal["sftp"]
+    user: Secret
+    password: Secret
     host: str
-    user: str
-    password: SecretStr
-    port: int = 22
-    remote_path: str
+    port: str = "22"
 
 
-# --- Jobs loading to shared destinations ---
-class BaseJobSharedDest(BaseJob):
-    """Comon fields for jobs loading to shared destinations."""
-
-    is_shared_destination: Literal[True]
-    shared_destination: str
-
-
-class JobSharedSmtp(BaseJobSharedDest):
-    """<job_name> INI section details for jobs using shared SMTP destinations."""
-
-    shared_destination: Literal["internal_smtp"]
-    recipients: List[EmailStr]
-    sender_email: EmailStr
-
-    @field_validator("recipients", mode="before")
-    @classmethod
-    def parse_recipients(cls, v):
-        return parse_comma_separated_str(v)
-
-
-class JobSharedFileshare(BaseJobSharedDest):
-    """<job_name> INI section details for jobs using shared Fileshare destinations."""
-
-    shared_destination: Literal["skyward_exports"]
-    path: str
-
-
-# ------------------- FINAL VALIDATED CONFIG MODELS ---------------
-class ValidatedConfigUnique(BaseModel):
-    """Fully validated configuration for a job with a unique destination."""
-
-    source: "SourceUnion"
-    shared_dest: None
-    job: "JobUniqueUnion"
-
-
-class ValidatedConfigSmtp(BaseModel):
-    """Fully validated configuration for a job using a shared SMTP destination."""
-
-    source: "SourceUnion"
-    shared_dest: SharedDestSmtp
-    job: JobSharedSmtp
-
-
-class ValidatedConfigFileshare(BaseModel):
-    """Fully validated configuration for a job using a shared Fileshare destination."""
-
-    source: "SourceUnion"
-    shared_dest: SharedDestFileshare
-    job: JobSharedFileshare
-
-
-# ------------------- UNION TYPE ALIASES --------------------------
-
-# Source Types
-SourceUnion = Union[SourceSkyward]
-
-# Shared Destination Types
-SharedDestUnion = Union[SharedDestSmtp, SharedDestFileshare]
-
-# Job Config (Unique Destination) Types
-JobUniqueUnion = Union[JobUniqueSftp]
-
-# Job Config (Shared Destination) Types
-JobSharedUnion = Union[JobSharedSmtp, JobSharedFileshare]
-
-# Combined, Unvalidated Type
-InitialConfigUnion = Union[JobUniqueUnion, JobSharedUnion]
-
-# Combined, Validatec Type (represents collated config object used througout pipeline)
-ValidatedConfigUnion = Union[
-    ValidatedConfigUnique, ValidatedConfigSmtp, ValidatedConfigFileshare
+Source = Annotated[
+    Union[SourceSql, SourceFileshare, SourceGoogleDrive, SourceSftp],
+    Field(discriminator="type"),
 ]
 
-# ------------------------------------------------------------------------------------------
-# -------------------------------- PATHS MODELS --------------------------------------------
-# ------------------------------------------------------------------------------------------
+
+# ------------------- DATA DESTINATION MODELS ----------------------------
+class DestSmtp(BaseModel):
+    protocol: Literal["smtp"]
+    host: str
+    port: str = 25
+    default_sender_email: EmailStr
 
 
-class InitialPaths(BaseModel):
-    """Model for paths dict used by pipeline to locate all needed files and directories."""
+class DestFileshare(BaseModel):
+    protocol: Literal["fileshare"]
+    mount_path: str
 
-    project_root: DirectoryPath
-    script_dir: DirectoryPath
-    output_dir: DirectoryPath
-    config_dir: DirectoryPath
-    query_file_path: FilePath
-    log_file_path: FilePath
-    config_file_path: FilePath
-
-    # Allows using pathlib.Path type hint directly
-    model_config = {"arbitrary_types_allowed": True}
-
-
-class FinalPaths(InitialPaths):
-    """Adds the job-config-dependent intermediate path."""
-
-    intermediate_file_path: Path
+    @model_validator(mode="after")
+    def path_exists(self):
+        path_to_check = Path(self.mount_path)
+        if not path_to_check.is_dir():
+            raise ValueError(
+                f"mount_path for destination fileshare does not point to a directory: {self.mount_path}"
+            )
+        return self
 
 
-# job_config: nested dict validated with pydantic models above; has the following shape:
-# job_config = {
-#     "source": {
-#         "source_name",
-#         "user",
-#         "password",
-#         "conn_string",
-#         "driver_name",
-#         "driver_file"
-#     },
-#     "shared_dest": None || {
-#         "shared_dest_name",
-#         "protocol",
-#         "host",
-#         "port",
-#         "mount_path"
-#     },
-#     "job": {
-#         # Common to all jobs
-#         "job_name",
-#         "source",
-#         "is_shared_destination",
-#         "base_filename",
-#         # Common to all shared dest jobs
-#         "shared_destination",
-#         ## shared: internal_smtp jobs
-#         "recipients",
-#         "sender_email",
-#         ## shared: skyward_exports jobs
-#         "path",
-#         # Unique destination SFTP jobs
-#         "protocol",
-#         "host",
-#         "user",
-#         "password",
-#         "port",
-#         "remote_path",
-#     }
-# }
+class DestSftp(BaseModel):
+    protocol: Literal["sftp"]
+    host: str
+    user: Secret
+    password: Secret
+    port: str = "22"
+
+
+class DestGoogleDrive(BaseModel):
+    protocol: Literal["google_drive"]
+    access_token: Path
+
+    @model_validator(mode="after")
+    def token_exists(self):
+        if not self.access_token.is_file():
+            raise ValueError(
+                f"access_token for Google Drive destination does not point to a file: {self.access_token}"
+            )
+        return self
+
+
+Destination = Annotated[
+    Union[DestSmtp, DestFileshare, DestSftp, DestGoogleDrive],
+    Field(discriminator="protocol"),
+]
+
+
+# ------------------- DATA INTEGRATION JOB MODEL -------------------------
+class Job(BaseModel):
+    extract: Dict[str, str | List[str]]
+    load: Dict[str, str | List[str]]
+
+
+# ------------------------------------------------------------------------
+# ------------------- OPERATIONAL STATE MODELS ---------------------------
+# ------------------------------------------------------------------------
+class PipelineData(BaseModel):
+    """A standardized container for data flowing through the pipeline."""
+
+    data_format: Literal["dataframe", "file", "in_memory_stream"]
+    content: Union[pd.DataFrame, Path, io.BytesIO]
+    metadata: dict = {}
+
+    @model_validator(mode="after")
+    def check_content_type_matches_format(self) -> "PipelineData":
+        """Ensures the type of 'content' matches the 'data_format' string."""
+
+        # Check for in-memory stream
+        if self.data_format == "in_memory_stream" and not isinstance(
+            self.content, io.BytesIO
+        ):
+            raise ValueError("For 'in_memory_stream', content must be io.BytesIO")
+
+        # Check for dataframe
+        if self.data_format == "dataframe" and not isinstance(
+            self.content, pd.DataFrame
+        ):
+            raise ValueError("For 'dataframe', content must be a pandas DataFrame")
+
+        # Check for file
+        if self.data_format == "file" and not isinstance(self.content, Path):
+            raise ValueError("For 'file', content must be a Path object")
+
+        return self
+
+
+class DestinationResponse(BaseModel):
+    """A standardized model for reporting the outcome of a load operation."""
+
+    destination_name: str
+    status: Literal["success", "failure"]
+    message: str
+    records_processed: int | None = None
+    timestamp: datetime = Field(default_factory=datetime.now)
+
+
+# ------------------------------------------------------------------------
+# ------------------- JOB-SPECIFIC LOGIC MODELS --------------------------
+# ------------------------------------------------------------------------
+class TransformFunc(BaseModel):
+    """
+    The function it wraps must accept a dictionary where keys are extract dependency
+    names and values are PipelineData objects ("student_query.sql": PipelineData(...),}).
+    It must return a dictionary of the same type ({"final_report.csv": PipelineData(...),}).
+    """
+
+    function: Callable[[Dict[str, PipelineData]], Dict[str, PipelineData]]
+
+    def __call__(self, data: Dict[str, PipelineData]) -> Dict[str, PipelineData]:
+        """Allows an instance of this class to be called directly like a function."""
+        return self.function(data)
+
+
+class EmailFunc(BaseModel):
+    function: Callable[..., Message]
+
+    def __call__(self, *args, **kwargs) -> Message:
+        return self.function(*args, **kwargs)

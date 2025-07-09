@@ -1,6 +1,6 @@
 from pathlib import Path
 
-
+# abs paths and remote rel paths are strings, local rel paths are Path objects
 PROJECT_ROOT = Path(__file__).parent.resolve()
 CREDS_DIR = PROJECT_ROOT / "creds"
 PROJECT_LOG_FILE = PROJECT_ROOT / "app" / "data_streams" / "data_bridge.log"
@@ -32,10 +32,9 @@ sources = {
     },
     "sftp_server": {
         "type": "sftp",
-        "protocol": "sftp",
-        "host": "123.456.789.1011",
         "user": "user",
         "password": "password",
+        "host": "123.456.789.1011",
         "port": "22",
     },
 }
