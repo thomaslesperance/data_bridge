@@ -120,28 +120,55 @@ Destination = Annotated[
 
 
 # ------------------- DATA INTEGRATION JOB MODEL -------------------------
-class Job(BaseModel):
-    extract: dict[str, list[str]]
-    load: dict[str, list[str]]
+class ExtractTaskConfig(BaseModel):
+    source: str
+    dependencies: str | list[str]
 
-    @field_validator("extract", "load", mode="before")
+    @field_validator("dependencies", mode="before")
     @classmethod
-    def normalize_dependencies_to_list(cls, v: dict[str, Any]) -> dict[str, list[str]]:
+    def normalize_dependencies_to_list(cls, v: Any) -> list[str]:
         """
         Allows a single string dependency (e.g., "file.sql") to be passed
         by automatically converting it to a list (e.g., ["file.sql"]).
         """
-        for key, value in v.items():
-            if isinstance(value, str):
-                v[key] = [value]
+        if isinstance(v, str):
+            return [v]
         return v
+
+
+class LoadTaskConfig(BaseModel):
+    destination: str
+    dependencies: str | list[str] | None = None
+    email_builder: str | None = None
+
+    @field_validator("dependencies", mode="before")
+    @classmethod
+    def normalize_dependencies_to_list(cls, v: Any) -> list[str]:
+        """
+        Allows a single string dependency (e.g., "report.csv") to be passed
+        by automatically converting it to a list (e.g., ["report.csv"]).
+        """
+        if isinstance(v, str):
+            return [v]
+        return v
+
+
+class Job(BaseModel):
+    extract: dict[str, ExtractTaskConfig]
+    load: dict[str, LoadTaskConfig]
 
 
 # ------------------------------------------------------------------------
 # ------------------- OPERATIONAL STATE MODELS ---------------------------
 # ------------------------------------------------------------------------
 class PipelineData(BaseModel):
-    """A standardized container for data flowing through the pipeline."""
+    """
+    A standardized container for data flowing through the pipeline.
+    Example uses of each data_format (and implied data type of content):
+    dataframe: SQL extractions will be converted into a pandas DataFrames by default;
+    in_memory_stream: Small files read from a fileshare or SFTP server will be passed as byte buffers until processed;
+    file: Large files moved from one place to another need not be loaded into memory and can be streamed piecemeal;
+    """
 
     data_format: Literal["dataframe", "file", "in_memory_stream"]
     content: Union[pd.DataFrame, Path, io.BytesIO]
@@ -186,12 +213,13 @@ class DestinationResponse(BaseModel):
 class TransformFunc(BaseModel):
     function: Callable[[dict[str, PipelineData]], dict[str, PipelineData]]
 
-    def __call__(self, data: dict[str, PipelineData]) -> dict[str, PipelineData]:
-        """Allows an instance of this class to be called directly like a function."""
-        return self.function(data)
+    def __call__(
+        self, extracted_data: dict[str, PipelineData]
+    ) -> dict[str, PipelineData]:
+        return self.function(extracted_data)
 
 
-class EmailFunc(BaseModel):
+class EmailBuilder(BaseModel):
     function: Callable[[dict[str, PipelineData]], Message]
 
     def __call__(self, email_data: dict[str, PipelineData]) -> Message:

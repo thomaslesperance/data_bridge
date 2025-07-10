@@ -67,28 +67,54 @@ destinations = {
 # Job Configurations
 jobs = {
     "example_simple_job": {
-        "extract": {"db1": "students.sql"},
-        "load": {"emails": ("smtp_server", "report.csv")},
+        "extract": {
+            "get_data": {
+                "source": "db1",
+                "dependencies": "query.sql",
+            }
+        },
+        "load": {
+            "send_data": {
+                "destination": "sftp_server",
+                "dependencies": "report.csv",
+            }
+        },
     },
     "example_complex_job": {
         "extract": {
-            "db1": ["grades.sql", "students.sql"],
-            "db2": "teachers.sql",
-            "fileshare": "remote/rel/path/export_file.csv",
-            "sftp_server": "remote/rel/path/file.xlsx",
+            "get_course_data": {
+                "source": "db1",
+                "dependencies": ["grades.sql", "students.sql"],
+            },
+            "get_legacy_export": {
+                "source": "fileshare",
+                "dependencies": "remote/rel/path/export_file.csv",
+            },
         },
         "load": {
-            "sftp_server": ["formatted_grades.csv", "active_teachers.csv"],
-            "google_drive_account": "remote/rel/path/summary.csv",
-            "emails": [
-                ("teacher_email", "smtp_server", "email_1_data.csv"),
-                (
-                    "admin_email",
-                    "smtp_server",
-                    "email_2_data_A.csv",
-                    "email_2_data_B.csv",
-                ),
-            ],
+            "sftp_upload_grades": {
+                "destination": "sftp_server",
+                "dependencies": ["formatted_grades.csv", "active_teachers.csv"],
+            },
+            "drive_summary_upload": {
+                "destination": "google_drive_account",
+                "dependencies": "remote/rel/path/summary.csv",
+            },
+            "teacher_notification": {
+                "destination": "smtp_server",
+                "dependencies": "email_1_data.csv",
+                "email_builder": "build_teacher_email",
+            },
+            "admin_summary_email": {
+                "destination": "smtp_server",
+                "dependencies": ["email_2_data_A.csv", "email_2_data_B.csv"],
+                "email_builder": "build_admin_email",
+            },
+            "job_complete_notification": {
+                "destination": "smtp_server",
+                "dependencies": None,
+                "email_builder": "build_status_email",
+            },
         },
     },
 }

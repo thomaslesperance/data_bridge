@@ -6,8 +6,35 @@ from utils.models import PipelineData
 from utils.data_stream import DataStream
 from config import sources, destinations, jobs, PROJECT_LOG_FILE
 
+
+# DIAGRAMATIC REPRESENTATION OF CUSTOM LOGIC INTERACTION WITH PIPELINE CODE:
+#
+# Extractor.extract()
+#     │
+#     └─> returns flat dict: {"students.sql": <PipelineData>, ...}
+#                                              │
+#                                              ▼
+#                          transform_fn(extracted_data)
+#                                │
+#                                ▼
+#        returns flat dict: {"report.csv": <PipelineData>, "email_data.csv": <PipelineData>, ...}
+#                 │
+#                 ▼
+# Loader.load(all_load_data)
+#     │
+#     ├─> (For an SFTP Task) ───> _sftp_load(PipelineData for "report.csv") ───> [SFTP Server]
+#     │
+#     └─> (For an Email Task) ───> email_builder_fn({"email_data.csv": <PipelineData>})
+#                                      │
+#                                      ▼
+#                                  Message Object
+#                                      │
+#                                      ▼
+#                        _smtp_load(Message) ───────────────> [SMTP Server]
+#
+#
 # ---------- JOB-SPECIFIC LOGIC -----------------
-## EXAMPLE:
+## EXAMPLE: -------------------------------------
 ## Here are functions that correctly simulate the transform step for the "example_complex_job"
 ## job in the "jobs" dict of the sample.config.py file:
 
@@ -15,9 +42,7 @@ from config import sources, destinations, jobs, PROJECT_LOG_FILE
 # extracted_data = {
 #   "grades.sql": <PipelineData object>,
 #   "students.sql": <PipelineData object>,
-#   "teachers.sql": <PipelineData object>,
 #   "remote/rel/path/export_file.csv": <PipelineData object>,
-#   "remote/rel/path/file.xlsx": <PipelineData object>,
 # }
 
 # And, after performing some example logic, it should hand this to the DataStream instance loader...
@@ -25,7 +50,9 @@ from config import sources, destinations, jobs, PROJECT_LOG_FILE
 #   "formatted_grades.csv": <PipelineData object>,
 #   "active_teachers.csv": <PipelineData object>,
 #   "remote/rel/path/summary.csv": <PipelineData object>,
-#   "email_data.csv": <PipelineData object>,
+#   "email_1_data.csv": <PipelineData object>,
+#   "email_2_data_A.csv": <PipelineData object>,
+#   "email_2_data_B.csv": <PipelineData object>,
 # }
 
 # The result is a job-specific mapping of data source-dependency to data destination-dependency mapping,
@@ -33,44 +60,110 @@ from config import sources, destinations, jobs, PROJECT_LOG_FILE
 # are composed of the correct components of extracted data.
 
 
-def transform(extracted_data: dict[str, PipelineData]) -> dict[str, PipelineData]:
+def transform_fn(extracted_data: dict[str, PipelineData]) -> dict[str, PipelineData]:
     """
     An example transform function that merges hypothetical student and grade data taken from
     SQL extractions and then prepares a CSV report in memory for loading.
+    Meant to showcase the transformation of data from extract dependencies to load dependencies.
     """
-    grades_df = extracted_data["grades.sql"].content
-    students_df = extracted_data["students.sql"].content
-    final_report_df = pd.merge(students_df, grades_df, on="student_id")
+    extracted_grades_data = extracted_data["grades.sql"].content
+    extracted_student_data = extracted_data["students.sql"].content
+    extracted_legacy_data = extracted_data["remote/rel/path/export_file.csv"].content
+    df = pd.merge(extracted_student_data, extracted_grades_data, on="student_id")
 
-    output_buffer = io.StringIO()
-    final_report_df.to_csv(output_buffer, index=False)
-    output_buffer.seek(0)
+    grades_load_data = df.loc[df["grades"].isna()].copy()
+    teachers_load_data = df.loc[df["teachers"] == "active", "employee_id"].copy()
 
-    # The key, "report.csv", must match a dependency in the job's 'load' config.
-    return {
-        "report.csv": PipelineData(
+    email_1_data = df.loc[df["teacher"].isna()].copy()
+    output_buffer_1 = io.BytesIO()
+    email_1_data.to_csv(output_buffer_1, index=False, encoding="utf-8")
+    output_buffer_1.seek(0)
+
+    email_2_A_data = df.loc[df["admin"].isna()].copy()
+    output_buffer_2 = io.BytesIO()
+    email_2_A_data.to_csv(output_buffer_2, index=False, encoding="utf-8")
+    output_buffer_2.seek(0)
+
+    email_2_B_data = df.loc[df["admin_status"] == "active", "employee_id"].copy()
+    output_buffer_3 = io.BytesIO()
+    email_2_B_data.to_csv(output_buffer_3, index=False, encoding="utf-8")
+    output_buffer_3.seek(0)
+
+    all_load_data = {
+        "formatted_grades.csv": PipelineData(
+            data_format="dataframe",
+            content=grades_load_data,
+        ),
+        "active_teachers.csv": PipelineData(
+            data_format="dataframe",
+            content=teachers_load_data,
+        ),
+        "remote/rel/path/summary.csv": PipelineData(
             data_format="in_memory_stream",
-            content=io.BytesIO(output_buffer.getvalue().encode("utf-8")),
+            content=extracted_legacy_data,
+        ),
+        "email_1_data.csv": PipelineData(
+            data_format="in_memory_stream",
+            content=output_buffer_1,
+        ),
+        "email_2_data_A.csv": PipelineData(
+            data_format="in_memory_stream",
+            content=output_buffer_2,
+        ),
+        "email_2_data_B.csv": PipelineData(
+            data_format="in_memory_stream",
+            content=output_buffer_3,
         ),
     }
 
-
-# The email function, in the case of the "example_complex_job", would expect "email_data.csv"
-# as the argument passed as email_data parameter.
-def email_fn(email_data: dict[str, PipelineData]) -> Message:
-    return None
+    return all_load_data
 
 
-# ---------- TEMPLATE CODE-----------------------
+# Example email functions for the example job "example_complex_job":
+# The passed email_data dict keys being dependency names for the email-based load task
+# and the values being associated PipelineData
+
+
+# email_data = {"email_1_data.csv": <PipelineData object>}
+def build_teacher_email(email_data: dict[str, PipelineData]) -> Message:
+    # ... logic to build and return the teacher email Message object ...
+    pass
+
+
+# email_data = {
+#   "email_2_data_A.csv": <PipelineData object>,
+#   "email_2_data_B.csv": <PipelineData object>
+# }
+def build_admin_email(email_data: dict[str, PipelineData]) -> Message:
+    # ... logic to build and return the admin email Message object ...
+    pass
+
+
+# email_data = {}
+def build_status_email(email_data: dict[str, PipelineData]) -> Message:
+    # ... logic to build and return a simple status email ...
+    pass
+
+
+# Map the builder names from the config to the actual functions
+email_builders = {
+    "build_teacher_email": build_teacher_email,
+    "build_admin_email": build_admin_email,
+    "build_status_email": build_status_email,
+}
+## END EXAMPLE: ---------------------------------
+# ---------- END JOB-SPECIFIC LOGIC -------------
+
+
 def main():
     job_name = Path(__file__).resolve().parent.name
     data_stream = DataStream(
         job_name=job_name,
+        job=jobs[job_name],
         avail_sources=sources,
         avail_destinations=destinations,
-        job=jobs[job_name],
-        transform=transform,
-        email_fn=email_fn,
+        transform_fn=transform_fn,
+        email_builders=email_builders,
         log_file=PROJECT_LOG_FILE,
     )
     data_stream.run()
@@ -81,7 +174,7 @@ if __name__ == "__main__":
 
 
 # TODO:
-# 1. Pydantic models
+# 1. Pydantic models + data stream skeleton
 # 2. Logging system (find popular lightweight library; intelligent format)
 # 3. Migrate jobs one-by-one
 #     --Extract/load methods as needed

@@ -4,7 +4,7 @@ from models import (
     Destination,
     Job,
     TransformFunc,
-    EmailFunc,
+    EmailBuilder,
     DestinationResponse,
 )
 from extract import Extractor
@@ -22,120 +22,113 @@ class DataStream:
         job,
         avail_sources,
         avail_destinations,
-        transform,
-        email_fn=None,
+        transform_fn,
+        email_builders=None,
         log_file="run.log",
     ) -> None:
 
         self.job_name = job_name
         self.log_file = log_file
-        self.job = job
-        self.avail_sources = avail_sources
-        self.avail_destinations = avail_destinations
-        self.transform = transform
-        self.email_fn = email_fn
 
-        config_issue = self._validate_config()
-        if config_issue:
-            raise ValueError(
-                f"Configuration has one or more errors:\n - {config_issue}"
-            )
+        self._validate_config(
+            job, avail_sources, avail_destinations, transform_fn, email_builders
+        )
 
+        self.extractor = Extractor(sources=self.sources, extract_tasks=self.job.extract)
+        self.loader = Loader(
+            destinations=self.destinations,
+            load_tasks=self.job.load,
+            email_builders=self.email_builders,
+        )
+
+    def _validate_config(
+        self, job_dict, avail_sources, avail_destinations, transform_fn, email_builders
+    ):
+        """
+        Orchestrates all validation steps. Raises a single ValueError if any issues are found,
+        but tries to collect multiple in a single validation phase if possible.
+        """
+        issues = []
+
+        # --- Step 1: Validate Job Structure ---
         try:
-            self.extractor = Extractor(
-                sources=self.sources, extract_config=self.job.extract
-            )
-            self.loader = Loader(
-                destinations=self.destinations, dest_config=self.job.load
-            )
-            # self.logger = logging.configure_logging(log_file, etc)
-        except Exception as e:
-            # self.logger.log(f"Data stream failed to assemble sub-components: {e}")
-            print(e)
-
-    def _validate_config(self):
-        # 1. ---------- Validate job
-        try:
-            self.job = Job(**self.job)
+            self.job = Job(**job_dict)
         except ValidationError as e:
-            return f"The 'job' configuration has a structural error: {e}"
+            raise ValueError(f"Job configuration is invalid: {e}")
 
-        # 2. ---------- Check that source(s)/destination(s) requested by job are available
-        if hasattr(self, "job"):
-            job_sources = set(self.job.extract.keys())
-            if not job_sources.issubset(self.avail_sources.keys()):
-                return f"Job references undefined sources: {job_sources - set(self.avail_sources.keys())}"
-            else:
-                sources_used = {
-                    name: self.avail_sources[name] for name in self.job.extract.keys()
-                }
+        # --- Step 2: Check for Existence ---
+        used_source_names = {task.source for task in self.job.extract.values()}
+        used_dest_names = {task.destination for task in self.job.load.values()}
 
-            job_dests = set(self.job.load.keys())
-            if not job_dests.issubset(self.avail_destinations.keys()):
-                return f"Job references undefined destinations: {job_dests - set(self.avail_destinations.keys())}"
-            else:
-                destinations_used = {
-                    name: self.avail_destinations[name] for name in self.job.load.keys()
-                }
-        else:
-            return f"Could not validate if requested sources/destinations are available due to job config failure"
+        if not used_source_names.issubset(avail_sources.keys()):
+            issues.append(
+                f"Job references undefined sources: {used_source_names - avail_sources.keys()}"
+            )
 
-        # 3. ---------- Validate used source(s)/destination(s)
-        self.sources = {}
-        for name, s in sources_used.items():
-            try:
-                self.sources[name] = Source(**s)
-            except ValidationError as e:
-                return f"Selected source '{name} has a structural error: {e}"
+        if not used_dest_names.issubset(avail_destinations.keys()):
+            issues.append(
+                f"Job references undefined destinations: {used_dest_names - avail_destinations.keys()}"
+            )
 
-        self.destinations = {}
-        for name, d in destinations_used.items():
-            try:
-                self.destinations[name] = Destination(**d)
-            except ValidationError as e:
-                return f"Selected destination '{name} has a structural error: {e}"
+        # --- Step 3: Validate Used Sources & Destinations ---
+        sources_to_validate = {name: avail_sources[name] for name in used_source_names}
+        dests_to_validate = {name: avail_destinations[name] for name in used_dest_names}
 
-        # 4. ---------- Validate that extract dependencies match source type
-        for source_name, dependencies in self.job.extract.items():
-            if not self.sources[source_name]:
-                return f"Source '{source_name}' extract dependencies could not be validated"
-            else:
-                source_model = self.sources[source_name]
+        try:
+            self.sources = {
+                name: Source(**s) for name, s in sources_to_validate.items()
+            }
+            self.destinations = {
+                name: Destination(**d) for name, d in dests_to_validate.items()
+            }
+        except ValidationError as e:
+            issues.append(f"A source or destination config is invalid: {e}")
 
-                # Sources of type="sql" should be SQL query file paths (e.g., "query.sql")
+        # --- Step 4: Validate Dependencies vs. Type (for just extract tasks for now) ---
+        if not issues:
+            for task_name, task_config in self.job.extract.items():
+                source_model = self.sources[task_config.source]
+
+                # SQL sources require .sql file paths
                 if source_model.type == "sql":
-                    for dep in dependencies:
+                    for dep in task_config.dependencies:
                         if not dep.endswith(".sql"):
-                            return f"Source '{source_name}' requires .sql files, but got '{dep}'"
-
-                # Sources of type="fileshare" or "sftp" should be relative paths
-                elif source_model.type in ["fileshare", "sftp"]:
-                    for dep in dependencies:
-                        if dep.startswith("/") or dep.endswith("/"):
-                            return f"Source '{source_name}' requires a relative file path, but got an absolute or directory-like path: '{dep}'"
-
-                # For Google Drive, dependency is likely a file name or ID,
-                # temporarily check to ensure it's not an empty string, but go back and update late once I know
-                elif source_model.type == "google_drive":
-                    for dep in dependencies:
-                        if not dep:
-                            return (
-                                f"Source '{source_name}' requires a non-empty string."
+                            issues.append(
+                                f"Extract task '{task_name}' requires .sql files, but got '{dep}'"
                             )
 
-        # 5. ---------- Validate job-specific logic
+                # Fileshare and SFTP sources require relative file paths
+                elif source_model.type in ["fileshare", "sftp"]:
+                    for dep in task_config.dependencies:
+                        if dep.startswith("/") or dep.endswith("/"):
+                            issues.append(
+                                f"Extract task '{task_name}' requires a relative file path, but got '{dep}'"
+                            )
+
+                # Google Drive sources require a non-empty string (name or ID)
+                elif source_model.type == "google_drive":
+                    for dep in task_config.dependencies:
+                        if not dep:
+                            issues.append(
+                                f"Extract task '{task_name}' requires a non-empty file name or ID."
+                            )
+
+        # --- Step 5: Validate Job-Specific Functions ---
         try:
-            self.transform = TransformFunc(function=self.transform)
+            self.transform = TransformFunc(function=transform_fn)
+            self.email_builders = {
+                name: EmailBuilder(function=func)
+                for name, func in (email_builders or {}).items()
+            }
         except ValidationError as e:
-            return f"Custom transform function does not meet model specifications: {e}"
+            issues.append(
+                f"A custom function (email builder or transform_fn) has an invalid signature: {e}"
+            )
 
-        if self.email_fn:
-            try:
-                self.email_fn = EmailFunc(function=self.email_fn)
-            except ValidationError as e:
-                return f"Custom email function does not meet model specifications: {e}"
-
-        return None
+        # --- Final Report ---
+        if issues:
+            all_errors = "\n - ".join(issues)
+            raise ValueError(f"Configuration has one or more errors:\n - {all_errors}")
 
     def log_job_results(self, dest_responses: list[DestinationResponse]):
         print("Logging the following destination responses:")
@@ -144,5 +137,5 @@ class DataStream:
     def run(self):
         extracted_data = self.extractor.extract()
         transformed_data = self.transform(extracted_data)
-        dest_responses = self.loader.load(transformed_data, email_fn=self.email_fn)
+        dest_responses = self.loader.load(transformed_data)
         self.log_job_results(dest_responses)
