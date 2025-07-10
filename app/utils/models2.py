@@ -1,8 +1,15 @@
 import io
 import pandas as pd
 from pathlib import Path
-from typing import Annotated, Union, Literal, Dict, List, Callable
-from pydantic import BaseModel, Secret, EmailStr, Field, model_validator
+from typing import Annotated, Union, Literal, Any, Callable
+from pydantic import (
+    BaseModel,
+    Secret,
+    EmailStr,
+    Field,
+    model_validator,
+    field_validator,
+)
 from datetime import datetime
 from email.message import Message
 
@@ -96,13 +103,14 @@ class DestGoogleDrive(BaseModel):
     protocol: Literal["google_drive"]
     access_token: Path
 
-    @model_validator(mode="after")
-    def token_exists(self):
-        if not self.access_token.is_file():
+    @field_validator("access_token", mode="after")
+    @classmethod
+    def token_must_be_file(cls, v: Path):
+        if not v.is_file():
             raise ValueError(
-                f"access_token for Google Drive destination does not point to a file: {self.access_token}"
+                f"access_token for Google Drive destination does not point to a file: {v}"
             )
-        return self
+        return v
 
 
 Destination = Annotated[
@@ -113,8 +121,20 @@ Destination = Annotated[
 
 # ------------------- DATA INTEGRATION JOB MODEL -------------------------
 class Job(BaseModel):
-    extract: Dict[str, str | List[str]]
-    load: Dict[str, str | List[str]]
+    extract: dict[str, list[str]]
+    load: dict[str, list[str]]
+
+    @field_validator("extract", "load", mode="before")
+    @classmethod
+    def normalize_dependencies_to_list(cls, v: dict[str, Any]) -> dict[str, list[str]]:
+        """
+        Allows a single string dependency (e.g., "file.sql") to be passed
+        by automatically converting it to a list (e.g., ["file.sql"]).
+        """
+        for key, value in v.items():
+            if isinstance(value, str):
+                v[key] = [value]
+        return v
 
 
 # ------------------------------------------------------------------------
@@ -164,21 +184,15 @@ class DestinationResponse(BaseModel):
 # ------------------- JOB-SPECIFIC LOGIC MODELS --------------------------
 # ------------------------------------------------------------------------
 class TransformFunc(BaseModel):
-    """
-    The function it wraps must accept a dictionary where keys are extract dependency
-    names and values are PipelineData objects ("student_query.sql": PipelineData(...),}).
-    It must return a dictionary of the same type ({"final_report.csv": PipelineData(...),}).
-    """
+    function: Callable[[dict[str, PipelineData]], dict[str, PipelineData]]
 
-    function: Callable[[Dict[str, PipelineData]], Dict[str, PipelineData]]
-
-    def __call__(self, data: Dict[str, PipelineData]) -> Dict[str, PipelineData]:
+    def __call__(self, data: dict[str, PipelineData]) -> dict[str, PipelineData]:
         """Allows an instance of this class to be called directly like a function."""
         return self.function(data)
 
 
 class EmailFunc(BaseModel):
-    function: Callable[..., Message]
+    function: Callable[[dict[str, PipelineData]], Message]
 
-    def __call__(self, *args, **kwargs) -> Message:
-        return self.function(*args, **kwargs)
+    def __call__(self, email_data: dict[str, PipelineData]) -> Message:
+        return self.function(email_data)

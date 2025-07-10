@@ -48,8 +48,8 @@ destinations = {
         "default_sender_email": "jobs@example.com",
     },
     "fileshare": {
-        "protocol" "fileshare",
-        "mount_path" "/abs/path/to/share/root",
+        "protocol": "fileshare",
+        "mount_path": "/abs/path/to/share/root",
     },
     "sftp_server": {
         "protocol": "sftp",
@@ -68,7 +68,7 @@ destinations = {
 jobs = {
     "example_simple_job": {
         "extract": {"db1": "students.sql"},
-        "load": {"smtp_server": "report.csv"},
+        "load": {"emails": ("smtp_server", "report.csv")},
     },
     "example_complex_job": {
         "extract": {
@@ -79,8 +79,16 @@ jobs = {
         },
         "load": {
             "sftp_server": ["formatted_grades.csv", "active_teachers.csv"],
-            "smtp_server": "",
             "google_drive_account": "remote/rel/path/summary.csv",
+            "emails": [
+                ("teacher_email", "smtp_server", "email_1_data.csv"),
+                (
+                    "admin_email",
+                    "smtp_server",
+                    "email_2_data_A.csv",
+                    "email_2_data_B.csv",
+                ),
+            ],
         },
     },
 }

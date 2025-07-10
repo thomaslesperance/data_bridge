@@ -1,102 +1,73 @@
-from models import Destination, PipelineData, EmailFunc, DestinationResponse
+from models import PipelineData, DestinationResponse
 
 
 class Loader:
 
-    def __init__(self, destinations, dest_config, email_fn=None):
-        self.dest_method_map = {
-            "smtp_server": self._smtp_load,
+    def __init__(self, destinations, load_config, email_fn=None):
+        self.dest_protocol_to_method = {
+            "smtp": self._smtp_load,
             "fileshare": self._share_load,
-            "sftp_server": self._sftp_load,
-            "google_drive_account": self._drive_load,
+            "sftp": self._sftp_load,
+            "google_drive": self._drive_load,
         }
 
         self.email_fn = email_fn
         self.load_tasks = []
 
-        # load_tasks = [{"dest_name": dest_name, "dest_config": dest_config, "method": load_method_ref, "dependency": load_dependency_path}, ...]
-        for dest_name, load_dependencies in dest_config.items():
-            if isinstance(load_dependencies, list):
-                for dependency in load_dependencies:
-                    load_task = {}
-                    load_task["dest_name"] = dest_name
-                    load_task["dest_config"] = destinations[dest_name]
-                    load_task["method"] = self.dest_method_map[dest_name]
-                    load_task["dependency"] = dependency
-                    self.load_tasks.append(load_task)
-            elif isinstance(load_dependencies, str):
-                load_task = {}
-                load_task["dest_name"] = dest_name
-                load_task["dest_config"] = destinations[dest_name]
-                load_task["method"] = self.dest_method_map[dest_name]
-                load_task["dependency"] = load_dependencies
+        for dest_name, load_dependencies in load_config.items():
+            dest_config = destinations[dest_name]
+            dest_protocol = dest_config.protocol
+            for dependency in load_dependencies:
+                load_task = {
+                    "dest_name": dest_name,
+                    "dest_config": dest_config,
+                    "method": self.dest_protocol_to_method[dest_protocol],
+                    "dependency": dependency,
+                }
                 self.load_tasks.append(load_task)
 
-    def _smtp_load(
-        self,
-        dest_config: Destination,
-        data_to_load: PipelineData,
-        email_msg: EmailFunc = None,
-    ) -> DestinationResponse:
+    def _smtp_load(self, dest_config, load_data) -> DestinationResponse:
         print("Some stuff")
 
-    def _share_load(
-        self, dest_config: Destination, data_to_load: PipelineData
-    ) -> DestinationResponse:
+    def _share_load(self, dest_config, load_data) -> DestinationResponse:
         print("Some stuff")
 
-    def _sftp_load(
-        self, dest_config: Destination, data_to_load: PipelineData
-    ) -> DestinationResponse:
-        """
-        Attempts to upload data to an SFTP server and returns a standardized response.
-        """
-        # Assumes data_to_load.content is a Path object to a local file
-        local_file_path = data_to_load.content
-        remote_path = f"/uploads/{local_file_path.name}"
-
-        try:
-            # Attempt the connection and file transfer
-            with pysftp.Connection(
-                host=dest_config.host, username=dest_config.user
-            ) as sftp:
-                sftp.put(local_file_path, remote_path)
-
-            # If successful, create a success response object
-            response = DestinationResponse(
-                destination_name=dest_config.name,
-                status="success",
-                message=f"File successfully uploaded to {remote_path}.",
-            )
-
-        except Exception as e:
-            # If any error occurs, create a failure response object
-            response = DestinationResponse(
-                destination_name=dest_config.name,
-                status="failure",
-                message=f"SFTP upload failed: {e}",
-            )
-
-        return response
-
-    def _drive_load(
-        self, dest_config: Destination, data_to_load: PipelineData
-    ) -> DestinationResponse:
+    def _sftp_load(self, dest_config, load_data) -> DestinationResponse:
         print("Some stuff")
 
-    def load(
-        self, data: PipelineData, email_msg: EmailFunc = None
-    ) -> list[DestinationResponse]:
-        """
-        Orchestrates all load tasks and collects their standardized responses.
-        """
-        # TODO: This needs to accept a flat dict of PipelineData objects where:
-        # key=load dependency report.csv and value=PipelineData object
-        all_responses = []
-        for task in self.load_tasks:
-            method_to_call = task["method"]
-            destination_config = task["dest_config"]
-            single_response = method_to_call(destination_config, data, email_msg)
-            all_responses.append(single_response)
+    def _drive_load(self, dest_config, load_data) -> DestinationResponse:
+        print("Some stuff")
 
-        return all_responses
+    # For jobs["example_complex_job"]:
+    # load_tasks = [
+    # {
+    #   "dest_name": dest_name,
+    #   "dest_config": dest_config,
+    #   "method": load_method_ref,
+    #   "dependency": load_dependency_path
+    # }, ...
+    # ]
+    # all_load_data = {
+    #   "formatted_grades.csv": <PipelineData object>,
+    #   "active_teachers.csv": <PipelineData object>,
+    #   "remote/rel/path/summary.csv": <PipelineData object>,
+    #   "email_data.csv": <PipelineData object>,
+    # }
+
+    def load(self, all_load_data: dict[str, PipelineData]) -> list[DestinationResponse]:
+        all_dest_responses = []
+
+        for load_task in self.load_tasks:
+            dependency_name = load_task["dependency"]
+            if dependency_name not in all_load_data:
+                # logger.log("Loader Could not find {dependency_name} to load to {load_task["dest_name"]} as requested")
+                continue
+
+            data_item = all_load_data[dependency_name]
+            method = load_task["method"]
+            dest_config = load_task["dest_config"]
+            dest_response = method(dest_config, data_item)
+
+            all_dest_responses.append(dest_response)
+
+        return all_dest_responses
