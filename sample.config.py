@@ -65,8 +65,10 @@ destinations = {
 }
 
 # Job Configurations
+# See Python docs for logging level values
 jobs = {
     "example_simple_job": {
+        "log_level": 20,
         "extract_tasks": {
             "get_data": {
                 "source": "db1",
@@ -81,6 +83,7 @@ jobs = {
         },
     },
     "example_complex_job": {
+        "log_level": 10,
         "extract_tasks": {
             "get_student_data": {
                 "source": "db1",

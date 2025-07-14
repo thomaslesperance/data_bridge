@@ -11,6 +11,7 @@ from pydantic import (
     field_validator,
 )
 from datetime import datetime
+import logging
 from email.message import Message
 
 
@@ -143,6 +144,7 @@ class LoadTaskConfig(BaseModel):
 
 
 class Job(BaseModel):
+    log_level: int
     extract_tasks: dict[str, ExtractTaskConfig]
     load_tasks: dict[str, LoadTaskConfig]
 

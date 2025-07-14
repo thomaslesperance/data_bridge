@@ -1,3 +1,4 @@
+import logging
 from pydantic import ValidationError
 from models import (
     Source,
@@ -23,28 +24,66 @@ class DataStream:
         avail_sources,
         avail_destinations,
         transform_fn,
+        log_file,
         email_builders=None,
-        log_file="run.log",
     ) -> None:
 
-        self.job_name = job_name
-        self.log_file = log_file
-
-        self._validate_config(
-            job, avail_sources, avail_destinations, transform_fn, email_builders
+        self.logger = self._setup_logger(
+            job_name, log_file, job.get("log_level", logging.INFO)
         )
 
-        self.extractor = Extractor(
-            sources=self.sources, extract_tasks=self.job.extract_tasks
-        )
-        self.loader = Loader(
-            destinations=self.destinations,
-            load_tasks=self.job.load_tasks,
-            email_builders=self.email_builders,
-        )
+        try:
+            self._validate_config(
+                job_dict=job,
+                avail_sources=avail_sources,
+                avail_destinations=avail_destinations,
+                transform_fn=transform_fn,
+                email_builders=email_builders,
+            )
+        except Exception as e:
+            self.logger.exception(
+                f"Failed to validate '{job_name}' data stream configuration:\n{e}"
+            )
+        self.logger.info(f"'{job_name}' job configuration validated with no issues")
+
+        try:
+            self.extractor = Extractor(
+                sources=self.sources,
+                extract_tasks=self.job.extract_tasks,
+                logger=self.logger,
+            )
+        except Exception as e:
+            self.logger.exception(f"Failed to instantiate Extractor class:\n{e}")
+        self.logger.info(f"Extractor class instantiated successfully")
+
+        try:
+            self.loader = Loader(
+                destinations=self.destinations,
+                load_tasks=self.job.load_tasks,
+                email_builders=self.email_builders,
+                logger=self.logger,
+            )
+        except Exception as e:
+            self.logger.exception(f"Failed to instantiate Loader class:\n{e}")
+        self.logger.info(f"Loader class instantiated successfully")
+
+    def _setup_logger(self, job_name, log_file, log_level) -> logging.Logger:
+        logger = logging.getLogger(job_name)
+        logger.setLevel(log_level)
+        format_str = "{asctime}:{name}:{levelname}:\n{message}\n\n"
+        formatter = logging.Formatter(fmt=format_str, style="{")
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        return logger
 
     def _validate_config(
-        self, job_dict, avail_sources, avail_destinations, transform_fn, email_builders
+        self,
+        job_dict,
+        avail_sources,
+        avail_destinations,
+        transform_fn,
+        email_builders,
     ):
         """
         Orchestrates all validation steps. Raises a single ValueError if any issues are found,
@@ -54,9 +93,10 @@ class DataStream:
 
         # --- Step 1: Validate Job Structure ---
         try:
+            self.logger.debug(f"Received job dict to validate: {job_dict}")
             self.job = Job(**job_dict)
         except ValidationError as e:
-            raise ValueError(f"Job configuration is invalid: {e}")
+            raise ValueError(f"Job configuration is invalid:\n{e}")
 
         # --- Step 2: Check for Existence ---
         used_source_names = {task.source for task in self.job.extract_tasks.values()}
@@ -84,7 +124,7 @@ class DataStream:
                 name: Destination(**d) for name, d in dests_to_validate.items()
             }
         except ValidationError as e:
-            issues.append(f"A source or destination config is invalid: {e}")
+            issues.append(f"A source or destination config is invalid:\n{e}")
 
         # --- Step 4: Validate Dependencies vs. Type (for just extract tasks for now) ---
         if not issues:
@@ -124,8 +164,12 @@ class DataStream:
             }
         except ValidationError as e:
             issues.append(
-                f"A custom function (email builder or transform_fn) has an invalid signature: {e}"
+                f"A custom function (email builder or transform_fn) has an invalid signature:\n{e}"
             )
+        self.logger.info("Transform function validated and instantiated successfully")
+        self.logger.info(
+            f"Email builder functiouns {self.email_builders.keys()} validated and instantiated successfully"
+        )
 
         # --- Final Report ---
         if issues:
@@ -133,11 +177,26 @@ class DataStream:
             raise ValueError(f"Configuration has one or more errors:\n - {all_errors}")
 
     def log_job_results(self, dest_responses: list[DestinationResponse]):
-        print("Logging the following destination responses:")
-        print(dest_responses)
+        for dest_response in dest_responses:
+            self.logger.info(f"{dest_response}\n\n")
 
     def run(self):
-        extracted_data = self.extractor.extract()
-        transformed_data = self.transform(extracted_data)
-        dest_responses = self.loader.load(transformed_data)
+        try:
+            extracted_data = self.extractor.extract()
+        except Exception as e:
+            self.logger.exception(f"Data extraction phase failed:\n{e}")
+        self.logger.info("Data extraction complete...")
+
+        try:
+            transformed_data = self.transform(extracted_data)
+        except Exception as e:
+            self.logger.exception(f"Data transformation phase failed:\n{e}")
+        self.logger.info("Data transformation complete...")
+
+        try:
+            dest_responses = self.loader.load(transformed_data)
+        except Exception as e:
+            self.logger.exception(f"Data loading phase failed:\n{e}")
+        self.logger.info("Data loading complete...")
+
         self.log_job_results(dest_responses)
