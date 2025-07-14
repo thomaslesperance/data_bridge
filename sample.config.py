@@ -67,13 +67,13 @@ destinations = {
 # Job Configurations
 jobs = {
     "example_simple_job": {
-        "extract": {
+        "extract_tasks": {
             "get_data": {
                 "source": "db1",
                 "dependencies": "query.sql",
             }
         },
-        "load": {
+        "load_tasks": {
             "send_data": {
                 "destination": "sftp_server",
                 "dependencies": "report.csv",
@@ -81,8 +81,8 @@ jobs = {
         },
     },
     "example_complex_job": {
-        "extract": {
-            "get_course_data": {
+        "extract_tasks": {
+            "get_student_data": {
                 "source": "db1",
                 "dependencies": ["grades.sql", "students.sql"],
             },
@@ -91,7 +91,7 @@ jobs = {
                 "dependencies": "remote/rel/path/export_file.csv",
             },
         },
-        "load": {
+        "load_tasks": {
             "sftp_upload_grades": {
                 "destination": "sftp_server",
                 "dependencies": ["formatted_grades.csv", "active_teachers.csv"],

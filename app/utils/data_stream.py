@@ -34,10 +34,12 @@ class DataStream:
             job, avail_sources, avail_destinations, transform_fn, email_builders
         )
 
-        self.extractor = Extractor(sources=self.sources, extract_tasks=self.job.extract)
+        self.extractor = Extractor(
+            sources=self.sources, extract_tasks=self.job.extract_tasks
+        )
         self.loader = Loader(
             destinations=self.destinations,
-            load_tasks=self.job.load,
+            load_tasks=self.job.load_tasks,
             email_builders=self.email_builders,
         )
 
@@ -57,8 +59,8 @@ class DataStream:
             raise ValueError(f"Job configuration is invalid: {e}")
 
         # --- Step 2: Check for Existence ---
-        used_source_names = {task.source for task in self.job.extract.values()}
-        used_dest_names = {task.destination for task in self.job.load.values()}
+        used_source_names = {task.source for task in self.job.extract_tasks.values()}
+        used_dest_names = {task.destination for task in self.job.load_tasks.values()}
 
         if not used_source_names.issubset(avail_sources.keys()):
             issues.append(
@@ -86,7 +88,7 @@ class DataStream:
 
         # --- Step 4: Validate Dependencies vs. Type (for just extract tasks for now) ---
         if not issues:
-            for task_name, task_config in self.job.extract.items():
+            for task_name, task_config in self.job.extract_tasks.items():
                 source_model = self.sources[task_config.source]
 
                 # SQL sources require .sql file paths

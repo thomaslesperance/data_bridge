@@ -3,7 +3,7 @@ from models import PipelineData
 
 class Extractor:
 
-    def __init__(self, sources, extract_config):
+    def __init__(self, sources, extract_tasks):
         self.source_type_to_method = {
             "sql": self._sql_extract,
             "fileshare": self._fileshare_extract,
@@ -13,10 +13,11 @@ class Extractor:
 
         self.extract_tasks = []
 
-        for source_name, extract_dependencies in extract_config.items():
+        for _, task_config in extract_tasks.items():
+            source_name = task_config.source
             source_config = sources[source_name]
             source_type = source_config.type
-            for dependency in extract_dependencies:
+            for dependency in task_config.dependencies:
                 extract_task = {
                     "source_name": source_name,
                     "source_config": source_config,
@@ -44,18 +45,46 @@ class Extractor:
     # For jobs["example_complex_job"]:
     # extract_tasks = [
     # {
-    #   "source_name": source_name,
-    #   "source_config": source_dict,
-    #   "method": extract_method_ref,
-    #   "dependency": extract_dependency_path
-    # }, ...
+    #   "source_name": "db1",
+    #   "source_config": {
+    #       "type": "sql",
+    #       "user": "user",
+    #       "password": "password",
+    #       "conn_string": "jdbc:datadirect:openedge://domain.net:12345;databaseName=databaseName",
+    #       "driver_name": "com.ddtek.jdbc.openedge.OpenEdgeDriver",
+    #       # You do not need to specify JAR file abs path if CLASSPATH set in ~/.zprofile
+    #   },
+    #   "method": self._sql_extract,
+    #   "dependency": "grades.sql",
+    # },
+    # {
+    #   "source_name": "db1",
+    #   "source_config": {
+    #       "type": "sql",
+    #       "user": "user",
+    #       "password": "password",
+    #       "conn_string": "jdbc:datadirect:openedge://domain.net:12345;databaseName=databaseName",
+    #       "driver_name": "com.ddtek.jdbc.openedge.OpenEdgeDriver",
+    #       # You do not need to specify JAR file abs path if CLASSPATH set in ~/.zprofile
+    #   },
+    #   "method": self._sql_extract,
+    #   "dependency": "students.sql",
+    # },
+    # {
+    #   "source_name": "fileshare",
+    #   "source_config": {
+    #       "type": "fileshare",
+    #       "mount_path": "/abs/path/to/share/root",
+    # },
+    #   "method": self._fileshare_extract,
+    #   "dependency": "remote/rel/path/export_file.csv",
+    # },
     # ]
+    #
     # extracted_data = {
     #   "grades.sql": <PipelineData object>,
     #   "students.sql": <PipelineData object>,
-    #   "teachers.sql": <PipelineData object>,
     #   "remote/rel/path/export_file.csv": <PipelineData object>,
-    #   "remote/rel/path/file.xlsx": <PipelineData object>,
     # }
 
     def extract(self) -> dict[str, PipelineData]:

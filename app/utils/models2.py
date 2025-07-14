@@ -122,18 +122,7 @@ Destination = Annotated[
 # ------------------- DATA INTEGRATION JOB MODEL -------------------------
 class ExtractTaskConfig(BaseModel):
     source: str
-    dependencies: str | list[str]
-
-    @field_validator("dependencies", mode="before")
-    @classmethod
-    def normalize_dependencies_to_list(cls, v: Any) -> list[str]:
-        """
-        Allows a single string dependency (e.g., "file.sql") to be passed
-        by automatically converting it to a list (e.g., ["file.sql"]).
-        """
-        if isinstance(v, str):
-            return [v]
-        return v
+    dependencies: str
 
 
 class LoadTaskConfig(BaseModel):
@@ -154,8 +143,8 @@ class LoadTaskConfig(BaseModel):
 
 
 class Job(BaseModel):
-    extract: dict[str, ExtractTaskConfig]
-    load: dict[str, LoadTaskConfig]
+    extract_tasks: dict[str, ExtractTaskConfig]
+    load_tasks: dict[str, LoadTaskConfig]
 
 
 # ------------------------------------------------------------------------

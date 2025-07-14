@@ -38,14 +38,14 @@ from config import sources, destinations, jobs, PROJECT_LOG_FILE
 ## Here are functions that correctly simulate the transform step for the "example_complex_job"
 ## job in the "jobs" dict of the sample.config.py file:
 
-# The transform function will receive this from the DataStream instance extractor...
+# The transform function will receive this flat dict from the DataStream instance extractor...
 # extracted_data = {
 #   "grades.sql": <PipelineData object>,
 #   "students.sql": <PipelineData object>,
 #   "remote/rel/path/export_file.csv": <PipelineData object>,
 # }
 
-# And, after performing some example logic, it should hand this to the DataStream instance loader...
+# And, after performing some example logic, it should hand this flat dict to the DataStream instance loader...
 # all_load_data = {
 #   "formatted_grades.csv": <PipelineData object>,
 #   "active_teachers.csv": <PipelineData object>,
