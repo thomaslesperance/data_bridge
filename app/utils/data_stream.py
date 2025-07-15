@@ -1,4 +1,6 @@
 import logging
+from logger import logger, JobNameFilter
+from errors import LogAndTerminate
 from pydantic import ValidationError
 from models import (
     Source,
@@ -19,24 +21,34 @@ class DataStream:
 
     def __init__(
         self,
+        globals,
+        sources,
+        destinations,
+        jobs,
         job_name,
-        job,
-        avail_sources,
-        avail_destinations,
         transform_fn,
-        log_file,
         email_builders=None,
     ) -> None:
 
-        self.logger = self._setup_logger(
-            job_name, log_file, job.get("log_level", logging.INFO)
+        try:
+            job = jobs[job_name]
+        except Exception as e:
+            raise Exception(
+                f"Cannot find '{job_name}' in config.config.jobs; data_stream dir name must = config job name:\n\t\t{e}\n"
+            )
+
+        self.logger = self._configure_logger(
+            logger=logger,
+            job_name=job_name,
+            log_file=globals.get("log_file", f"{job_name}.log"),
+            log_level=job.get("log_level", logging.INFO),
         )
 
         try:
             self._validate_config(
                 job_dict=job,
-                avail_sources=avail_sources,
-                avail_destinations=avail_destinations,
+                avail_sources=sources,
+                avail_destinations=destinations,
                 transform_fn=transform_fn,
                 email_builders=email_builders,
             )
@@ -67,10 +79,12 @@ class DataStream:
             self.logger.exception(f"Failed to instantiate Loader class:\n{e}")
         self.logger.info(f"Loader class instantiated successfully")
 
-    def _setup_logger(self, job_name, log_file, log_level) -> logging.Logger:
-        logger = logging.getLogger(job_name)
+    def _configure_logger(
+        self, logger, job_name, log_file, log_level
+    ) -> logging.Logger:
         logger.setLevel(log_level)
-        format_str = "{asctime}:{name}:{levelname}:\n{message}\n\n"
+        logger.addFilter(JobNameFilter(job_name))
+        format_str = "\n\n{levelname}:\t{asctime}:\t{job_name}:\n\t{message}\n"
         formatter = logging.Formatter(fmt=format_str, style="{")
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(formatter)

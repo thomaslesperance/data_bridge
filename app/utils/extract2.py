@@ -69,7 +69,7 @@ class Extractor:
                 method = extract_task["method"]
                 data = method(extract_task["source_config"], extract_task["dependency"])
                 extracted_data[extract_task["dependency"]] = data
-                self.logging.debug(
+                self.logger.debug(
                     f"Extracted data: {extracted_data[extract_task["dependency"]]}"
                 )
             except Exception as e:

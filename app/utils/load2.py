@@ -76,11 +76,14 @@ class Loader:
                 load_method = load_task["method"]
                 dest_config = load_task["dest_config"]
                 task_data = {}
-                for dependency in load_task["dependencies"]:
+                load_dependencies = load_task.get("dependencies", [])
+                for dependency in load_dependencies:
                     if dependency in all_load_data.keys():
                         task_data[dependency] = all_load_data[dependency]
                     else:
-                        # logger.log("Loader Could not find {dependency_name} to load to {load_task["dest_name"]} as requested")
+                        self.logger.warning(
+                            f"Loader could not find {dependency} in extraxted/transformed data to load to {load_task["dest_name"]}"
+                        )
                         continue
 
                 email_builder = load_task["email_builder"]
@@ -89,9 +92,11 @@ class Loader:
                     message = email_builder_fn(task_data)
                     response = load_method(dest_config, message)
                     all_dest_responses.append(response)
+                    self.logger.debug(f"Response for email task received: {response}")
                 else:
                     response = load_method(dest_config, task_data)
                     all_dest_responses.append(response)
+                    self.logger.debug(f"Response for load task received: {response}")
             except Exception as e:
                 raise Exception(
                     f"Loading {task_data} to '{load_task["dest_name"]}' failed:\n{e}"

@@ -4,7 +4,7 @@ from pathlib import Path
 from email.message import Message
 from utils.models import PipelineData
 from utils.data_stream import DataStream
-from config import sources, destinations, jobs, PROJECT_LOG_FILE
+from config import config
 
 
 # ---------- JOB-SPECIFIC LOGIC -----------------
@@ -23,6 +23,7 @@ def transform_fn(extracted_data: dict[str, PipelineData]) -> dict[str, PipelineD
     grades_load_data = df.loc[df["grades"].isna()].copy()
     teachers_load_data = df.loc[df["teachers"] == "active", "employee_id"].copy()
 
+    # TODO: Refactor this operation to a new utils.utils module
     email_1_data = df.loc[df["teacher"].isna()].copy()
     output_buffer_1 = io.BytesIO()
     email_1_data.to_csv(output_buffer_1, index=False, encoding="utf-8")
@@ -95,12 +96,9 @@ email_builders = {
 def main():
     job_name = Path(__file__).resolve().parent.name
     data_stream = DataStream(
+        **config,
         job_name=job_name,
-        job=jobs[job_name],
-        avail_sources=sources,
-        avail_destinations=destinations,
         transform_fn=transform_fn,
-        log_file=PROJECT_LOG_FILE | f"{job_name}.log",
         email_builders=email_builders,
     )
     data_stream.run()
@@ -112,7 +110,12 @@ if __name__ == "__main__":
 
 # TODO:
 # X 1. Pydantic models + data stream skeleton
-# 2. Logging system (find popular lightweight library; intelligent format; log/exception decorators)
-# 3. Migrate jobs one-by-one
+# 2. Logging system
+#   find popular lightweight library if not in STL
+#   intelligent format
+#   log/exception decorators
+# 2a. spread kwargs into constructors
+# 3. Write unit tests for core pipeline components
+# 4. Migrate jobs one-by-one
 #     --Extract/load methods as needed
 #     --Start with IA as good example that uses pandas
