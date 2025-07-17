@@ -1,15 +1,15 @@
 import logging
 
 
-class JobNameFilter(logging.Filter):
-    """A filter to inject the job_name into every log record."""
+class StreamNameFilter(logging.Filter):
+    """A filter to inject the stream_name into every log record."""
 
-    def __init__(self, job_name):
+    def __init__(self, stream_name):
         super().__init__()
-        self.job_name = job_name
+        self.stream_name = stream_name
 
-    def filter(self, record):
-        record.job_name = self.job_name
+    def filter(self, record) -> bool:
+        record.stream_name = self.stream_name
         return True
 
 

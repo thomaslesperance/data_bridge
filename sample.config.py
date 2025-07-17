@@ -1,15 +1,15 @@
 from pathlib import Path
 
 # abs paths and remote rel paths are strings, local rel paths are Path objects
-PROJECT_ROOT = Path(__file__).parent.resolve()
-CREDS_DIR = PROJECT_ROOT / "creds"
-PROJECT_LOG_FILE = PROJECT_ROOT / "app" / "data_streams" / "data_bridge.log"
+DATA_BRIDGE_ROOT = Path(__file__).parent.resolve()
+CREDS_DIR = DATA_BRIDGE_ROOT / "creds"
+LOG_FILE = DATA_BRIDGE_ROOT / "app" / "data_streams" / "data_bridge.log"
 
 
-config = {
+data_bridge_config = {
     # Global variables
     "globals": {
-        "log_file": PROJECT_LOG_FILE,
+        "log_file": LOG_FILE,
     },
     # Data Sources
     "sources": {
@@ -69,8 +69,8 @@ config = {
         },
     },
     # Job Configurations
-    "jobs": {
-        "example_simple_job": {
+    "streams": {
+        "example_simple_stream": {
             "log_level": 20,
             "extract_tasks": {
                 "get_data": {
@@ -85,7 +85,7 @@ config = {
                 }
             },
         },
-        "example_complex_job": {
+        "example_complex_stream": {
             "log_level": 10,
             "extract_tasks": {
                 "get_student_data": {

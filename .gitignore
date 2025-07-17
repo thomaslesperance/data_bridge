@@ -3,8 +3,8 @@ test/
 venv/
 dist/
 
-app/data_streams/*
-!app/data_streams/_template/
+app/datastreams/*
+!app/datastreams/_template/
 
 creds/*
 !creds/creds_placeholder.txt

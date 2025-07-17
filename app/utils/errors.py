@@ -4,18 +4,18 @@ from logger import logger
 
 
 class LogAndTerminate:
-    def __init__(self, func, log_message: str = None):
-        functools.update_wrapper(self, func)
-        self.func = func
+    def __init__(self, log_message: str = None):
+        self.logger = logger
         self.log_message = log_message
 
-    def __call__(self, func):
+    def __call__(self, func) -> callable:
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             """
             Executes the stored function inside a try/except block; logs exception.
             """
             try:
-                return self.func(*args, **kwargs)
+                return func(*args, **kwargs)
             except Exception as e:
                 default_log_message = f"An error occurred in '{self.func.__name__}'"
                 self.logger.exception(
