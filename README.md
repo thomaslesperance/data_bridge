@@ -11,20 +11,20 @@ For each data stream, the user would need to define the new stream in the config
 data_stream.extractor.extract()
                         │
                         ▼
-          returns flat dict: {"students.sql": <PipelineData>, ...}
+          returns flat dict: {"students.sql": <StreamData>, ...}
                                             │
                                             ▼
                 data_stream.transform(extracted_data)
                                 │
                                 ▼
-                  returns flat dict: {"report.csv": <PipelineData>, "email_data.csv": <PipelineData>, ...}
+                  returns flat dict: {"report.csv": <StreamData>, "email_data.csv": <StreamData>, ...}
                                                   │
                                                   ▼
                                 Loader.load(all_load_data)
                                         │
-                                        ├─> (Normal load task) ─-> _sftp_load(<PipelineData> for "report.csv") ──> [SFTP Server]
+                                        ├─> (Normal load task) ─-> _sftp_load(<StreamData> for "report.csv") ──> [SFTP Server]
                                         │
-                                        └─> (Email load task)  ──> email_builder_fn({"email_data.csv": <PipelineData>})
+                                        └─> (Email load task)  ──> email_builder_fn({"email_data.csv": <StreamData>})
                                                                             │
                                                                             ▼
                                                         _smtp_load(email.message.Message) ──> [SMTP Server]
@@ -42,29 +42,29 @@ Configuration for an example data stream is given in the sample.config.py file. 
 
 ### Extractor instance -> user-defined `transform_fn`:
 extracted_data = {
-  "grades.sql": <PipelineData object>,
-  "students.sql": <PipelineData object>,
-  "remote/rel/path/export_file.csv": <PipelineData object>,
+  "grades.sql": <StreamData object>,
+  "students.sql": <StreamData object>,
+  "remote/rel/path/export_file.csv": <StreamData object>,
 }
 
 The transform step ensures the load dependencies for the stream are composed of the correct components of extracted data.
 
 ### user-defined `transform_fn` -> Loader instance:
 all_load_data = {
-  "formatted_grades.csv": <PipelineData object>,
-  "active_teachers.csv": <PipelineData object>,
-  "remote/rel/path/summary.csv": <PipelineData object>,
-  "email_1_data.csv": <PipelineData object>,
-  "email_2_data_A.csv": <PipelineData object>,
-  "email_2_data_B.csv": <PipelineData object>,
+  "formatted_grades.csv": <StreamData object>,
+  "active_teachers.csv": <StreamData object>,
+  "remote/rel/path/summary.csv": <StreamData object>,
+  "email_1_data.csv": <StreamData object>,
+  "email_2_data_A.csv": <StreamData object>,
+  "email_2_data_B.csv": <StreamData object>,
 }
 
 Data for build_teacher_email:
-    email_data = {"email_1_data.csv": <PipelineData object>}
+    email_data = {"email_1_data.csv": <StreamData object>}
 Data for build_admin_email
     email_data = {
-        "email_2_data_A.csv": <PipelineData object>,
-        "email_2_data_B.csv": <PipelineData object>
+        "email_2_data_A.csv": <StreamData object>,
+        "email_2_data_B.csv": <StreamData object>
     }
 Data for build_status_email
     email_data = {}

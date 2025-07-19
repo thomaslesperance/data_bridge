@@ -7,8 +7,8 @@ from app.utils.datastream import DataStream
 from config import data_bridge_config
 
 
-# ---------- JOB-SPECIFIC LOGIC -----------------
-## EXAMPLE (see README for details): -------------------------------------
+# ---------- STREAM-SPECIFIC LOGIC --------------
+## EXAMPLE (see README for details): ------------
 def transform_fn(extracted_data: dict[str, StreamData]) -> dict[str, StreamData]:
     """
     An example transform function that merges hypothetical student and grade data taken from
@@ -85,7 +85,7 @@ email_builders = {
     "build_status_email": build_status_email,
 }
 ## END EXAMPLE: ---------------------------------
-# ---------- END JOB-SPECIFIC LOGIC -------------
+# ---------- END STREAM-SPECIFIC LOGIC ----------
 
 
 # ---------- TEMPLATE LOGIC ---------------------
