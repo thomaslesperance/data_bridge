@@ -1,4 +1,105 @@
-# Data Integration Pipeline
+# Data Bridge
 
-## Description
-This project is a data integration pipeline (DIP) composed of one or more data integration elements (DIEs). The DIEs consist primarily of a single Python script that calls on utility functions to extract, transform, and load data. A config.ini file should be set by the user to define data source and destination details, including credentials, ports, connection string, and so on. 
+## Overview
+This project is a data integration pipeline ("data bridge") composed of one or more data integration processes ("streams"). The data streams consist of Python scripts that 1), define all stream-specific logic to be performed on extracted data, 2) instantiate a DataStream class using a central configuration file and call its `run` method. Using only the central configuration file, a user may define individual streams that are themselves composed of one or more data extraction tasks and one or more data loading tasks. These tasks will rely on configuration in the same file that define the requested sources and destinations as well as methods in the Extractor and Loader classes.
+
+Each DataStream instance is composed of instantiated Extractor and Loader classes. The configuration passed to the DataStream constructor is fed down into the constructors for these components.
+
+For each data stream, the user would need to define the new stream in the configuration file and implement the stream-specific logic in the main.py script of the data stream. The Extractor and Loader classes can be added to with any additonal extract or load methods that are needed to complete the integration.
+
+# Flow of Data in Data Stream:
+data_stream.extractor.extract()
+                        │
+                        ▼
+          returns flat dict: {"students.sql": <PipelineData>, ...}
+                                            │
+                                            ▼
+                data_stream.transform(extracted_data)
+                                │
+                                ▼
+                  returns flat dict: {"report.csv": <PipelineData>, "email_data.csv": <PipelineData>, ...}
+                                                  │
+                                                  ▼
+                                Loader.load(all_load_data)
+                                        │
+                                        ├─> (Normal load task) ─-> _sftp_load(<PipelineData> for "report.csv") ──> [SFTP Server]
+                                        │
+                                        └─> (Email load task)  ──> email_builder_fn({"email_data.csv": <PipelineData>})
+                                                                            │
+                                                                            ▼
+                                                        _smtp_load(email.message.Message) ──> [SMTP Server]
+
+## Features
+Pydantic - models are defined for configuration state and to standardize data the flowing within the data stream
+Pandas - the extract and load methods take advantage of pandas where possible
+In-memory data processing - unless chunking of larger files is needed, all data flows into and out of the data stream without diskIO
+Centralized log system - all data streams set up in the data bridge instance will log to a single log file with a readable format
+Elegant error-handling - errors are handled using class-based decorator factories to improve code readability
+Modularity - functions are pure where possible, classes or methods can be extended for this project or dropped easily into other projects
+
+## "example_complex_stream"
+Configuration for an example data stream is given in the sample.config.py file. The following illustrates the transformation of data within the data stream using this example:
+
+### Extractor instance -> user-defined `transform_fn`:
+extracted_data = {
+  "grades.sql": <PipelineData object>,
+  "students.sql": <PipelineData object>,
+  "remote/rel/path/export_file.csv": <PipelineData object>,
+}
+
+The transform step ensures the load dependencies for the stream are composed of the correct components of extracted data.
+
+### user-defined `transform_fn` -> Loader instance:
+all_load_data = {
+  "formatted_grades.csv": <PipelineData object>,
+  "active_teachers.csv": <PipelineData object>,
+  "remote/rel/path/summary.csv": <PipelineData object>,
+  "email_1_data.csv": <PipelineData object>,
+  "email_2_data_A.csv": <PipelineData object>,
+  "email_2_data_B.csv": <PipelineData object>,
+}
+
+Data for build_teacher_email:
+    email_data = {"email_1_data.csv": <PipelineData object>}
+Data for build_admin_email
+    email_data = {
+        "email_2_data_A.csv": <PipelineData object>,
+        "email_2_data_B.csv": <PipelineData object>
+    }
+Data for build_status_email
+    email_data = {}
+
+## Install in Production Environment
+  cd /path/to/project/parent
+  git clone <repo URL>
+  cd <repo name>
+  python3 -m venv venv
+    MacOS: source venv/bin/activate
+    Windows: .\venv\Scripts\activate
+  pip3 install -r requirements.txt
+  pip3 install . --no-deps  
+
+## Project TODO:
+### 1. Write unit tests for core pipeline components
+  Potential units for unit tests:
+    DataStream()
+    DataStream.instance._validate_config()
+    DataStream.instance.run()
+    Extractor()
+    Extractor.instance.extract()
+    Loader()
+    Loader.instance.load()
+
+### 2. Replace legacy integrations one-by-one
+  --Extract/load methods as needed
+  --Start with IA as good example that uses pandas
+  --Ensure max encryption possible on all inbound/outbound data
+  --Ensure all optimization principles followed (SQL, disk IO, pandas)
+  --Test that each works and record performance metrics
+
+### 3. Establish secret management
+  --Need separate server for environment variable injection?
+  --Should data_bridge instance be in a docker container?
+
+### 4. Establish CI/CD
+  --Do some research...

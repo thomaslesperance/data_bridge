@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "data_bridge"
+version = "0.0.1"
+authors = [
+    { name = "Thomas L'Esperance", email = "tmles2023@gmail.com" },
+]
+description = "A data integration pipeline capable of integrating data between multiple sources and multiple destinations. The project features pandas for custom data transformations to be added to each integration element and pydantic for config file validation."
+readme = "README.md"
+requires-python = "~=3.13"
+dependencies = [
+    "pydantic~=2.11.5",
+    "JayDeBeApi~=1.2.3",
+    "paramiko~=3.5.1",
+    "pandas~=2.3.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]

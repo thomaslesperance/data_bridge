@@ -1,8 +1,38 @@
-config.ini
-*.jar
-**/__pycache__/
-*.csv
-data_integration_elements/DIE_*/
+# Directory structure
 test/
 venv/
+dist/
+
+app/datastreams/*
+!app/datastreams/_template/
+
+creds/*
+!creds/creds_placeholder.txt
+
+drivers/*
+!drivers/drivers_placeholder.txt
+
+
+# Config and credentials
+.env
+config.ini
+config.py
+config.*
+*.pickle
+*.token
+*.json
+credentials.json
+service_account.json
+
+
+# Data
+*.csv
+*.xlsx
+*.json
+
+
+# Miscellaneous
+*.jar
+__pycache__/
+*.egg-info/
 .DS_STORE
