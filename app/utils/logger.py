@@ -14,3 +14,13 @@ class StreamNameFilter(logging.Filter):
 
 
 logger = logging.getLogger("data_bridge_logger")
+
+
+def get_configured_logger(stream_name, log_file) -> logging.Logger:
+    logger.addFilter(StreamNameFilter(stream_name))
+    format_str = "\n\n{levelname}:\t{asctime}:\t{stream_name}:\n\t{message}\n"
+    formatter = logging.Formatter(fmt=format_str, style="{")
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    return logger

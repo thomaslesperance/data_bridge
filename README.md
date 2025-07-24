@@ -7,7 +7,7 @@ Each DataStream instance is composed of instantiated Extractor and Loader classe
 
 For each data stream, the user must define the new stream in the configuration file and implement the stream-specific logic in the main.py script of the data stream. Additonal extract or load methods can be added to the Extractor and Loader classes as the need arises.
 
-# Flow of Data in Data Stream:
+## Flow of Data in Data Stream:
 ```
 data_stream.extractor.extract()
                         │
