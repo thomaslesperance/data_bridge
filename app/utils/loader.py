@@ -1,4 +1,5 @@
 import shutil
+import pysftp
 from logger import logger
 from models import StreamData, DestinationResponse
 from transformutils import df_to_csv_buffer
@@ -83,6 +84,15 @@ class Loader:
 
     def _sftp_load(self, dest_config, load_data) -> DestinationResponse:
         print("Some stuff")
+        # with pysftp.Connection(**THIRD_FUTURE_SFTP) as sftp:
+        #     with sftp.cd(DISCIPLINE_REMOTE_PATH):
+        #         sftp.putfo(
+        #             disc_csv_buffer, f"{DISCIPLINE_REMOTE_PATH}/{DISCIPLINE_FILE_NAME}"
+        #         )
+        #     with sftp.cd(ATTENDANCE_REMOTE_PATH):
+        #         sftp.putfo(
+        #             att_csv_buffer, f"{ATTENDANCE_REMOTE_PATH}/{ATTENDANCE_FILE_NAME}"
+        #         )
 
     def _drive_load(self, dest_config, load_data) -> DestinationResponse:
         print("Some stuff")

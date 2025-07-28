@@ -113,3 +113,14 @@ Data for build_status_email:
 
 ### 4. Establish CI/CD
   * Do some research...
+
+
+## Note 7-24-25
+Two potential issues I've noticed after pushing this project farther along:
+1. The current set up does not allow for query parameters. It would not be difficult to allow a space for static query parameters to 
+be defined in the stream config. But many existing jobs seems to use dynamic parameters for their queries.
+2. Building on the first, several existing jobs use the results from one extraction to generate a list of parameters for a successive query.
+The current setup does not allow for that without totally breaking the system and importing extractor logic into the main.py file.
+
+Hopefully these will be a non-issue with my efficient query methodology, namely, running several small index-based queries and then 
+using pandas to filter and combine data between multiple dataframes.

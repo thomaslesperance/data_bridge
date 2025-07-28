@@ -233,5 +233,94 @@ class ValidatedConfig(BaseModel):
     stream: Stream
     sources: dict[str, Source]
     destinations: dict[str, Destination]
-    transform: TransformFunc
+    transformer: TransformFunc
     email_builders: dict[str, EmailBuilder]
+
+    @classmethod
+    def from_raw_config(
+        cls,
+        stream_name: str,
+        raw_config: dict,
+        raw_transform_fn: callable,
+        raw_email_builders: dict[str, callable],
+    ) -> "ValidatedConfig":
+        """
+        A factory method to build and validate the complete configuration
+        from raw inputs.
+        """
+        validation_issues = []
+
+        avail_sources = raw_config.get("sources", {})
+        avail_dests = raw_config.get("destinations", {})
+        stream_dict = raw_config.get("streams", {}).get(stream_name)
+
+        if not stream_dict:
+            raise ValueError(f"Stream '{stream_name}' not found in configuration.")
+
+        validated_stream = Stream(**stream_dict)
+
+        used_source_names = {t.source for t in validated_stream.extract_tasks.values()}
+        used_dest_names = {t.destination for t in validated_stream.load_tasks.values()}
+
+        if not used_source_names.issubset(avail_sources.keys()):
+            validation_issues.append(
+                f"Stream references undefined sources: {used_source_names - avail_sources.keys()}"
+            )
+        if not used_dest_names.issubset(avail_dests.keys()):
+            validation_issues.append(
+                f"Stream references undefined destinations: {used_dest_names - avail_dests.keys()}"
+            )
+
+        validated_sources = {
+            name: Source(**avail_sources[name]) for name in used_source_names
+        }
+        validated_dests = {
+            name: Destination(**avail_dests[name]) for name in used_dest_names
+        }
+
+        for (
+            extract_task_name,
+            extract_task_config,
+        ) in validated_stream.extract_tasks.items():
+            source_model = validated_sources[extract_task_config.source]
+
+            # SQL sources require .sql file paths
+            if source_model.type == "sql":
+                for dep in extract_task_config.dependencies:
+                    if not dep.endswith(".sql"):
+                        validation_issues.append(
+                            f"Extract task '{extract_task_name}' requires .sql files, but got '{dep}'"
+                        )
+
+            # Fileshare and SFTP sources require relative file paths
+            elif source_model.type in ["fileshare", "sftp"]:
+                for dep in extract_task_config.dependencies:
+                    if dep.startswith("/") or dep.endswith("/"):
+                        validation_issues.append(
+                            f"Extract task '{extract_task_name}' requires a relative file path, but got '{dep}'"
+                        )
+
+            # Google Drive sources require a non-empty string (name or ID)
+            elif source_model.type == "google_drive":
+                for dep in extract_task_config.dependencies:
+                    if not dep:
+                        validation_issues.append(
+                            f"Extract task '{extract_task_name}' requires a non-empty file name or ID."
+                        )
+
+        validated_transformer = TransformFunc(function=raw_transform_fn)
+        validated_email_builders = {
+            name: EmailBuilder(function=builder) for name, builder in raw_email_builders
+        }
+
+        if validation_issues:
+            error_report = "\n - ".join(validation_issues)
+            raise ValueError(f"Configuration has errors:\n\t - {error_report}")
+
+        return cls(
+            stream=validated_stream,
+            sources=validated_sources,
+            destinations=validated_dests,
+            transformer=validated_transformer,
+            email_builders=validated_email_builders,
+        )

@@ -1,5 +1,4 @@
 from errors import LogAndTerminate
-from configvalidator import ConfigValidator
 from extractor import Extractor
 from loader import Loader
 
@@ -35,7 +34,7 @@ def create_data_stream(
     raw_transform_fn: callable,
     raw_email_builders: dict[str, callable] = {},
 ) -> DataStream:
-    validated_config = ConfigValidator.validate(
+    validated_config = validated_config.from_raw_config(
         stream_name=stream_name,
         raw_config=raw_config,
         raw_transform_fn=raw_transform_fn,

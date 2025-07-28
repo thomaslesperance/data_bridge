@@ -7,4 +7,5 @@ def df_to_csv_buffer(
 ) -> io.BytesIO:
     bytes_buffer = io.BytesIO()
     df.to_csv(bytes_buffer, index=keep_df_index, encoding=encoding)
-    return bytes_buffer.seek(0)
+    bytes_buffer.seek(0)
+    return bytes_buffer
