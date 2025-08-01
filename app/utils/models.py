@@ -1,4 +1,6 @@
 import io
+import uuid
+import logging
 from pathlib import Path
 from datetime import datetime
 from email.message import Message
@@ -10,7 +12,10 @@ from pydantic import (
     Field,
     model_validator,
     field_validator,
+    AfterValidator,
+    BeforeValidator,
 )
+from pydantic.config import ConfigDict
 import pandas as pd
 
 
@@ -121,9 +126,30 @@ Destination = Annotated[
 
 # ------------------- DATA STREAM MODELS ---------------------------------
 class Stream(BaseModel):
-    log_level: int
+    log_level: int = logging.INFO
     steps: list["Step"]
 
+
+def check_is_sql_file(v: any) -> any:
+    """Ensures the input string ends with .sql."""
+    if not isinstance(v, str) or not v.endswith(".sql"):
+        raise ValueError(f"Path must be a string ending in .sql; got '{v}'")
+    return v
+
+
+def validate_is_relative_path(v: str) -> str:
+    """Raises a ValueError if the path starts or ends with a slash."""
+    if v.startswith("/") or v.endswith("/"):
+        raise ValueError(
+            f"Path must be relative and not start or end with '/', but got '{v}'"
+        )
+    return v
+
+
+RemoteRelPathStr = Annotated[str, AfterValidator(validate_is_relative_path)]
+RelativeSqlPath = Annotated[
+    Path, BeforeValidator(check_is_sql_file), BeforeValidator(validate_is_relative_path)
+]
 
 Step = Annotated[
     Union["ExtractStep", "TransformStep", "LoadStep"],
@@ -164,27 +190,27 @@ class BaseExtractStep(BaseStep):
 
 class SqlExtractStep(BaseExtractStep):
     protocol: Literal["sql"]
-    query_file_path: Path
-    path_params: dict[str, str]
-    query_params: dict[str, str]
+    query_file_path: RelativeSqlPath
+    path_params: dict[str, str] | None = None
+    query_params: dict[str, str] | None = None
 
 
 class SftpExtractStep(BaseExtractStep):
     protocol: Literal["sftp"]
-    remote_file_path: str
-    path_params: dict[str, str]
+    remote_file_path: RemoteRelPathStr
+    path_params: dict[str, str] | None = None
 
 
 class SmbExtractStep(BaseExtractStep):
     protocol: Literal["smb"]
-    remote_file_path: str
-    path_params: dict[str, str]
+    remote_file_path: RemoteRelPathStr
+    path_params: dict[str, str] | None = None
 
 
 class GoogleDriveExtractStep(BaseExtractStep):
     protocol: Literal["google_drive"]
-    remote_file_path: str
-    path_params: dict[str, str]
+    remote_file_path: RemoteRelPathStr
+    path_params: dict[str, str] | None = None
 
 
 ## ------------------- LOAD STEP MODELS ----------------------------------
@@ -195,28 +221,33 @@ class BaseLoadStep(BaseStep):
     input: str | list[str]
 
 
+class EmailParams(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    recipients: str | list[str]
+
+
 class SmtpLoadStep(BaseLoadStep):
     protocol: Literal["smtp"]
     email_builder: "EmailBuilder"
-    email_params: dict[str, str]
+    email_params: EmailParams
 
 
 class SftpLoadStep(BaseLoadStep):
     protocol: Literal["sftp"]
-    remote_file_path: str
-    path_params: dict[str, str]
+    remote_file_path: RemoteRelPathStr
+    path_params: dict[str, str] | None = None
 
 
 class SmbLoadStep(BaseLoadStep):
     protocol: Literal["smb"]
-    remote_file_path: str
-    path_params: dict[str, str]
+    remote_file_path: RemoteRelPathStr
+    path_params: dict[str, str] | None = None
 
 
 class GoogleDriveLoadStep(BaseLoadStep):
     protocol: Literal["google_drive"]
-    remote_file_path: str
-    path_params: dict[str, str]
+    remote_file_path: RemoteRelPathStr
+    path_params: dict[str, str] | None = None
 
 
 # ------------------------------------------------------------------------
@@ -236,106 +267,6 @@ class EmailBuilder(BaseModel):
 
     def __call__(self, email_data: dict[str, "StreamData"]) -> Message:
         return self.function(email_data)
-
-
-# # ------------------------------------------------------------------------
-# # ------------------- COMBINED CONFIG MODELS -----------------------------
-# # ------------------------------------------------------------------------
-# class ValidatedConfig(BaseModel):
-#     stream: Stream
-#     sources: dict[str, Source]
-#     destinations: dict[str, Destination]
-#     transformer: TransformFunc
-#     email_builders: dict[str, EmailBuilder]
-
-#     @classmethod
-#     def from_raw_config(
-#         cls,
-#         stream_name: str,
-#         raw_config: dict,
-#         raw_transform_fn: Callable,
-#         raw_email_builders: dict[str, Callable],
-#     ) -> "ValidatedConfig":
-#         """
-#         A factory method to build and validate the complete configuration
-#         from raw inputs.
-#         """
-#         validation_issues = []
-
-#         avail_sources = raw_config.get("sources", {})
-#         avail_dests = raw_config.get("destinations", {})
-#         stream_dict = raw_config.get("streams", {}).get(stream_name)
-
-#         if not stream_dict:
-#             raise ValueError(f"Stream '{stream_name}' not found in configuration.")
-
-#         validated_stream = Stream(**stream_dict)
-
-#         used_source_names = {t.source for t in validated_stream.extract_tasks.values()}
-#         used_dest_names = {t.destination for t in validated_stream.load_tasks.values()}
-
-#         if not used_source_names.issubset(avail_sources.keys()):
-#             validation_issues.append(
-#                 f"Stream references undefined sources: {used_source_names - avail_sources.keys()}"
-#             )
-#         if not used_dest_names.issubset(avail_dests.keys()):
-#             validation_issues.append(
-#                 f"Stream references undefined destinations: {used_dest_names - avail_dests.keys()}"
-#             )
-
-#         validated_sources = {
-#             name: Source(**avail_sources[name]) for name in used_source_names
-#         }
-#         validated_dests = {
-#             name: Destination(**avail_dests[name]) for name in used_dest_names
-#         }
-
-#         for (
-#             extract_task_name,
-#             extract_task_config,
-#         ) in validated_stream.extract_tasks.items():
-#             source_model = validated_sources[extract_task_config.source]
-
-#             # SQL sources require .sql file paths
-#             if source_model.type == "sql":
-#                 for dep in extract_task_config.dependencies:
-#                     if not dep.endswith(".sql"):
-#                         validation_issues.append(
-#                             f"Extract task '{extract_task_name}' requires .sql files, but got '{dep}'"
-#                         )
-
-#             # Smb and SFTP sources require relative file paths
-#             elif source_model.type in ["smb", "sftp"]:
-#                 for dep in extract_task_config.dependencies:
-#                     if dep.startswith("/") or dep.endswith("/"):
-#                         validation_issues.append(
-#                             f"Extract task '{extract_task_name}' requires a relative file path, but got '{dep}'"
-#                         )
-
-#             # Google Drive sources require a non-empty string (name or ID)
-#             elif source_model.type == "google_drive":
-#                 for dep in extract_task_config.dependencies:
-#                     if not dep:
-#                         validation_issues.append(
-#                             f"Extract task '{extract_task_name}' requires a non-empty file name or ID."
-#                         )
-
-#         validated_transformer = TransformFunc(function=raw_transform_fn)
-#         validated_email_builders = {
-#             name: EmailBuilder(function=builder) for name, builder in raw_email_builders
-#         }
-
-#         if validation_issues:
-#             error_report = "\n - ".join(validation_issues)
-#             raise ValueError(f"Configuration has errors:\n\t - {error_report}")
-
-#         return cls(
-#             stream=validated_stream,
-#             sources=validated_sources,
-#             destinations=validated_dests,
-#             transformer=validated_transformer,
-#             email_builders=validated_email_builders,
-#         )
 
 
 # ------------------------------------------------------------------------
@@ -389,6 +320,17 @@ class DestinationResponse(BaseModel):
 
 
 class DataStore(BaseModel):
-    step_outputs: dict[str, StreamData]
-    dest_responses: list[DestinationResponse]
-    meta_data: dict = {}
+    # Validate assignments to instance during run
+    model_config = ConfigDict(validate_assignment=True)
+
+    # --- Run Metadata ---
+    run_id: str = Field(default_factory=lambda: f"run_{uuid.uuid4().hex}")
+    stream_name: str
+    status: Literal["running", "success", "failed"] = "running"
+    start_time: datetime = Field(default_factory=datetime.now)
+    end_time: datetime | None = None
+
+    # --- Resolved Data & State ---
+    resolved_macros: dict[str, any] = {}
+    step_outputs: dict[str, StreamData] = {}
+    dest_responses: list[DestinationResponse] = []
