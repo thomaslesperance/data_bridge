@@ -186,9 +186,9 @@ data_bridge_config = {
                     "protocol": "smb",
                     "dest_config": "sftp_server",
                     "input": "admin_report",
-                    "remote_file_path": "archive/reports/admin_reports/::date::/admin_report_::timestamp::.csv",
+                    "remote_file_path": "archive/reports/admin_reports/::date::/admin_report_::school_year::.csv",
                     "path_params": {
-                        "timestamp": "macro::TIMESTAMP",
+                        "school_year": "macro:SCHOOL_YEAR",
                         "date": "macro:YYYYMMDD",
                     },
                 },
@@ -205,9 +205,6 @@ data_bridge_config = {
 # 1. All values are static except:
 # 2. Paths can have placeholders 'rel/path/to/report_::<placeholder_name>::.csv`
 # 3. "..._params" keys are dicts of strings whose values are either static or dynamic:
-#   Currently available param keys:
-#       path_params, query_params, email_params
-#       (each are dicts)
 # Dynamic options:
 #       macro: run a pre-defined fuction with given name to use it's return value here
 #       step: use the data in the data_store object under this name
@@ -215,23 +212,13 @@ data_bridge_config = {
 #               "recipients": "step:ref_to_previous_step_output"  <-- required
 #               "subject": "static value!",
 #           }
+#   Currently available param keys:
+#       path_params: str, or macro
+#       query_params: str, macro, or step
+#       email_params: str, macro, or step
+#       (each are dicts)
 
 
-# How to have the code "hydrate" the raw config into something to be passed into Steam()
-# ### ## 1. Update `models.py` for Validation
-# Your first step is to build the Pydantic models that will validate your new configuration structure.
-# * **Create Step-Specific Models:** Define separate Pydantic models for each step `type` (`ExtractStep`, `TransformStep`, `LoadStep`). Use a `Literal` field in each as the discriminator.
-# * **Create a Discriminated Union:** Combine the step-specific models into a single `Step` type using `typing.Union` and `Field(discriminator="type")`.
-# * **Create a Root `StreamConfig` Model:** Build a main model that contains the `steps: list[Step]` and references to the `sources` and `destinations` dictionaries.
-# * **Implement the Root Validator:** Add a `@model_validator` to the `StreamConfig` model to perform the cross-validation checks (e.g., ensuring an SMTP load step has an `email_builder`).
-# ***
-# ### ## 2. Build the Orchestrator in `datastream.py`
-# This file will contain the engine that runs the pipeline.
-# * **Create the `DataStream` Class:** This class will be initialized with the validated configuration.
-# * **Define the Macro Registry:** Create the dictionary (`MACRO_REGISTRY`) that maps template strings like `{{TIMESTAMP}}` to their corresponding Python functions.
-# * **Implement the Parameter Resolver:** Write the `_resolve_params` helper method inside the `DataStream` class. This function will handle static values, resolve macros from the registry, and look up dependencies from the `data_store`.
-# * **Build the `run()` Method:** Create the main `run()` method that initializes the `data_store`, loops through the configured steps, calls the parameter resolver for each step, and executes the appropriate component (`Extractor`, `Transformer`, or `Loader`).
-# ***
 # ### ## 3. Enhance `Extractor` and `Loader` Classes
 # Update your core components to handle the logic defined in the new configuration.
 # * **Modify the `Extractor`:**
@@ -241,6 +228,3 @@ data_bridge_config = {
 # * **Modify the `Loader`:**
 #     * Update it to handle the new configuration keys, such as `destination_path` for SFTP and fileshare loads.
 # ***
-# ### ## 4. Update `main.py` Entry Point
-# Keep this file simple. Its only job is to kick off the process.
-# * **Instantiate and Run:** Modify the `main()` function to call your Pydantic `StreamConfig` model to validate the configuration, instantiate the `DataStream` class with the validated config, and then call the `.run()` method.

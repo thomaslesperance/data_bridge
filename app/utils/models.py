@@ -157,13 +157,15 @@ Step = Annotated[
 ]
 
 ExtractStep = Annotated(
-    ["SqlExtractStep", "SftpExtractStep", "SmbExtractStep", "GoogleDriveExtractStep"],
+    Union[
+        "SqlExtractStep", "SftpExtractStep", "SmbExtractStep", "GoogleDriveExtractStep"
+    ],
     Field(discriminator="protocol"),
 )
 
 
 LoadStep = Annotated(
-    ["SqlExtractStep", "SftpLoadStep", "SmbLoadStep", "GoogleDriveLoadStep"],
+    Union["SqlExtractStep", "SftpLoadStep", "SmbLoadStep", "GoogleDriveLoadStep"],
     Field(discriminator="protocol"),
 )
 
@@ -256,10 +258,8 @@ class GoogleDriveLoadStep(BaseLoadStep):
 class TransformFunc(BaseModel):
     function: Callable[[dict[str, "StreamData"]], dict[str, "StreamData"]]
 
-    def __call__(
-        self, extracted_data: dict[str, "StreamData"]
-    ) -> dict[str, "StreamData"]:
-        return self.function(extracted_data)
+    def __call__(self, data: dict[str, "StreamData"]) -> dict[str, "StreamData"]:
+        return self.function(data)
 
 
 class EmailBuilder(BaseModel):
@@ -330,7 +330,6 @@ class DataStore(BaseModel):
     start_time: datetime = Field(default_factory=datetime.now)
     end_time: datetime | None = None
 
-    # --- Resolved Data & State ---
-    resolved_macros: dict[str, any] = {}
+    # --- Operational State ---
     step_outputs: dict[str, StreamData] = {}
     dest_responses: list[DestinationResponse] = []

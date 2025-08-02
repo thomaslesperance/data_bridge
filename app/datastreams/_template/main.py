@@ -11,15 +11,15 @@ from app.utils.datastream import create_data_stream
 
 # ---------- STREAM-SPECIFIC LOGIC --------------
 ## EXAMPLE (see README for details): ------------
-def transform_fn(extracted_data: dict[str, StreamData]) -> dict[str, StreamData]:
+def transform_fn_1(data: dict[str, StreamData]) -> dict[str, StreamData]:
     """
     An example transform function that merges hypothetical student and grade data taken from
     SQL extractions and then prepares a CSV report in memory for loading.
     Meant to showcase the transformation of data from extract dependencies to load dependencies.
     """
-    extracted_grades_df = extracted_data["grades.sql"].content
-    extracted_student_df = extracted_data["students.sql"].content
-    extracted_legacy_buffer = extracted_data["remote/rel/path/export_file.csv"].content
+    extracted_grades_df = data["grades.sql"].content
+    extracted_student_df = data["students.sql"].content
+    extracted_legacy_buffer = data["remote/rel/path/export_file.csv"].content
     df = pd.merge(extracted_student_df, extracted_grades_df, on="student_id")
 
     grades_load_df = extracted_grades_df.loc[df["grades"].isna()].copy()
@@ -66,6 +66,18 @@ def transform_fn(extracted_data: dict[str, StreamData]) -> dict[str, StreamData]
     return all_load_data
 
 
+def transform_fn_2(data: dict[str, StreamData]) -> dict[str, StreamData]:
+    pass
+
+
+def transform_fn_3(data: dict[str, StreamData]) -> dict[str, StreamData]:
+    pass
+
+
+def transform_fn_4(data: dict[str, StreamData]) -> dict[str, StreamData]:
+    pass
+
+
 def build_teacher_email(email_data: dict[str, StreamData]) -> Message:
     # ... logic to build and return the teacher email Message object ...
     pass
@@ -81,7 +93,11 @@ def build_status_email(email_data: dict[str, StreamData]) -> Message:
     pass
 
 
-email_builders = {
+function_registry = {
+    "transform_fn_1": transform_fn_1,
+    "transform_fn_2": transform_fn_2,
+    "transform_fn_3": transform_fn_3,
+    "transform_fn_4": transform_fn_4,
     "build_teacher_email": build_teacher_email,
     "build_admin_email": build_admin_email,
     "build_status_email": build_status_email,
@@ -93,7 +109,7 @@ email_builders = {
 # ---------- TEMPLATE LOGIC ---------------------
 def main():
     try:
-        stream_name = Path(__file__).resolve().parent.name
+        stream_name = Path(__file__).resolve().parent.stem
         log_file = (data_bridge_config.globals.log_file | f"{stream_name}.log",)
         log_level = (
             data_bridge_config.get("streams", {})
@@ -108,12 +124,10 @@ def main():
         data_stream = create_data_stream(
             stream_name=stream_name,
             raw_config=data_bridge_config,
-            raw_transform_fn=transform_fn,
-            raw_email_builders=email_builders,
+            stream_logger=logger,
+            raw_functions=function_registry,
         )
-        dest_responses = data_stream.run()
-        for dest_response in dest_responses:
-            logger.info(f"Load task completed:\n\t{dest_response}\n\n")
+        data_stream.run()
 
     except Exception as e:
         print(e)
