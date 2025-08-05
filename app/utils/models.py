@@ -194,7 +194,7 @@ class SqlExtractStep(BaseExtractStep):
     protocol: Literal["sql"]
     query_file_path: RelativeSqlPath
     path_params: dict[str, str] | None = None
-    query_params: dict[str, str] | None = None
+    query_params: str | dict[str, str] | None = None
 
 
 class SftpExtractStep(BaseExtractStep):
@@ -278,12 +278,20 @@ class StreamData(BaseModel):
 
     Example uses of each data_format (and implied data type of content):
         dataframe: SQL extractions will be converted into a pandas DataFrames by default;
-        in_memory_stream: Small files read from a Smb or SFTP server will be passed as byte buffers until processed;
+        file_buffer: Small files read from a Smb or SFTP server will be passed as byte buffers until processed;
         file: Large files moved from one place to another need not be loaded into memory and can be streamed piecemeal;
     """
 
-    data_format: Literal["dataframe", "file", "in_memory_stream"]
-    content: Union[pd.DataFrame, Path, io.BytesIO]
+    data_format: Literal[
+        "dataframe",
+        "file_path",
+        "file_buffer",
+        "python_string",
+        "python_int",
+        "python_list",
+        "python_dict",
+    ]
+    content: Union[pd.DataFrame, Path, io.BytesIO, str, int, list, dict]
     metadata: dict = {}
 
     @model_validator(mode="after")
@@ -291,20 +299,36 @@ class StreamData(BaseModel):
         """Ensures the type of 'content' matches the 'data_format' string."""
 
         # Check for in-memory stream
-        if self.data_format == "in_memory_stream" and not isinstance(
+        if self.data_format == "file_buffer" and not isinstance(
             self.content, io.BytesIO
         ):
-            raise ValueError("For 'in_memory_stream', content must be io.BytesIO")
+            raise ValueError("For 'file_buffer', content must be of type 'io.BytesIO'")
 
         # Check for dataframe
         if self.data_format == "dataframe" and not isinstance(
             self.content, pd.DataFrame
         ):
-            raise ValueError("For 'dataframe', content must be a pandas DataFrame")
+            raise ValueError("For 'dataframe', content must be of type 'pd.DataFrame'")
 
         # Check for file
-        if self.data_format == "file" and not isinstance(self.content, Path):
-            raise ValueError("For 'file', content must be a Path object")
+        if self.data_format == "file_path" and not isinstance(self.content, Path):
+            raise ValueError("For 'file_path', content must be of type 'pathlib.Path'")
+
+        # Check for Python str
+        if self.data_format == "python_string" and not isinstance(self.content, str):
+            raise ValueError("For 'python_string', content must be of type 'str'")
+
+        # Check for Python int
+        if self.data_format == "python_int" and not isinstance(self.content, int):
+            raise ValueError("For 'python_int', content must be of type 'int'")
+
+        # Check for Python list
+        if self.data_format == "python_list" and not isinstance(self.content, list):
+            raise ValueError("For 'python_list', content must be of type 'list'")
+
+        # Check for Python dict
+        if self.data_format == "python_dict" and not isinstance(self.content, dict):
+            raise ValueError("For 'python_dict', content must be of type 'dict'")
 
         return self
 
