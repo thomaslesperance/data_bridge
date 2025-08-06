@@ -1,6 +1,6 @@
 import functools
 import sys
-from logger import logger
+from .logger import logger
 
 
 class LogAndTerminate:
@@ -17,7 +17,7 @@ class LogAndTerminate:
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                default_log_message = f"An error occurred in '{self.func.__name__}'"
+                default_log_message = f"An error occurred in '{func.__name__}'"
                 self.logger.exception(
                     f"{self.log_message or default_log_message}:\n\t\t'{e}'\n"
                 )

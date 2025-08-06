@@ -231,8 +231,35 @@ data_bridge_config = {
 
 
 # TODO:
-# Clean up all code
-# Review error handling and where to put decorators in new code
-# Review how and where to control data_format options for StreamData
-# Review where best to convert data_format amongst app components
-# Figure out how to specify file extension and file name in StreamData
+
+# file name & data_format architectural update
+#   extract step config can optionally set data_format and filename (might need crosschecking if both specified)
+#   transform step config sets neither as user makes this explicit in functions
+#   load step config can optionally specify final file name(s); data formats are coerced based on load method
+#       Need to figure out issue of multiple inputs (only needed with email steps, but might be helpful in general
+#       Will file type be an issue and if so will the suffix on filename be sufficient?
+#       Will email steps mess things up since they are also user-defined
+# I THINK THE KEY HERE (to avoid reworking the app over and over) IS TO UNDERSTAND THE CONTRACT BETWEEN:
+# THE CONFIG FILE, THE APP METHOD BEHAVIOR, AND THE DATASTREAM OBJECT
+# THEN, DOES THAT CONTRACT SATISFY ALL POSSIBLE (REASONABLE) NEEDS FOR THIS APP
+# WHAT TOOLS AND METHODS DO PROFESSIONALS USE TO DO THIS SORT OF APP ARCHITECTURE/LOGIC/API DESIGN?
+
+# email builder helper
+
+# change gets to [] except where defaults possible
+
+# figure out LogAndTerminate and if log and re-raise gives clean (or repeated and hard to read) error blocks in log file
+
+# Factor out param hydration for query and email params keys
+
+# Use jaydebeapi query param tool (need new functions) and possibly sql util file
+
+# in datastream.py implement a dependency graph and ensure that every input required by a step corresponds to an output from a previous step
+
+# _share_load and _sftp_load methods contain almost identical logic for handling the different data_format types
+
+# variable names in signatures when viewed together with all functions in call stack; clean up
+
+# Look into `from __future__ import annotations` solution to type hint issue
+
+# type hint all methods with short but helpful doc strings

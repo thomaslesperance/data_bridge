@@ -247,18 +247,21 @@ class SmtpLoadStep(BaseLoadStep):
 class SftpLoadStep(BaseLoadStep):
     protocol: Literal["sftp"]
     remote_file_path: RemoteRelPathStr
+    file_name: str | None = None
     path_params: dict[str, str] | None = None
 
 
 class SmbLoadStep(BaseLoadStep):
     protocol: Literal["smb"]
     remote_file_path: RemoteRelPathStr
+    file_name: str | None = None
     path_params: dict[str, str] | None = None
 
 
 class GoogleDriveLoadStep(BaseLoadStep):
     protocol: Literal["google_drive"]
     remote_file_path: RemoteRelPathStr
+    file_name: str | None = None
     path_params: dict[str, str] | None = None
 
 
@@ -273,7 +276,7 @@ class TransformFunc(BaseModel):
 
 
 class EmailBuilder(BaseModel):
-    function: Callable[[dict, "StreamData" | list["StreamData"], dict], Message]
+    function: Callable[[Destination, dict[str, "StreamData"], EmailParams], Message]
 
     def __call__(self, email_data: dict[str, "StreamData"]) -> Message:
         return self.function(email_data)
@@ -290,6 +293,7 @@ class StreamData(BaseModel):
         dataframe: SQL extractions will be converted into a pandas DataFrames by default;
         file_buffer: Small files read from a Smb or SFTP server will be passed as byte buffers until processed;
         file: Large files moved from one place to another need not be loaded into memory and can be streamed piecemeal;
+        python_<type>: For data transmitted between transform steps to eliminate redundant conversions;
     """
 
     data_format: Literal[
@@ -302,6 +306,7 @@ class StreamData(BaseModel):
         "python_dict",
     ]
     content: Union[pd.DataFrame, Path, io.BytesIO, str, int, list, dict]
+    file_name: str | None = None
     metadata: dict = {}
 
     @model_validator(mode="after")

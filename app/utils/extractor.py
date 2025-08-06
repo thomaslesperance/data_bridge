@@ -1,11 +1,10 @@
-from logger import logger
-from models import ExtractStep, StreamData
-import jaydebeapi
-import pandas as pd
 import re
 import io
 import shutil
+import jaydebeapi
+import pandas as pd
 import pysftp
+from .models import ExtractStep, StreamData
 
 
 class Extractor:
@@ -127,7 +126,7 @@ class Extractor:
     ) -> str:
         resolved_query_string = raw_query_string
         for key, value in resolved_query_params.items():
-            if type(value) == "StreamData":
+            if isinstance(value, StreamData):
                 if value.data_format == "python_string":
                     resolved_query_string.replace(f"::{key}::", f"'{value}'")
                 if value.data_format == "python_int":

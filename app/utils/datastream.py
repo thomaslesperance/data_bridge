@@ -1,9 +1,11 @@
 import logging
 from datetime import datetime
-from errors import LogAndTerminate
-from models import Stream, DataStore
-from extractor import Extractor
-from loader import Loader
+
+from .errors import LogAndTerminate
+from .models import Stream, DataStore
+from .extractor import Extractor
+from .loader import Loader
+from .macros import macro_registry
 
 
 class DataStream:
@@ -33,7 +35,7 @@ class DataStream:
                     step_outputs=step_outputs,
                     macro_registry=macro_registry,
                 )
-                self.data_store[step.output] = extracted_data
+                self.data_store.step_outputs[step.output] = extracted_data
 
             if "transform" in step.type:
                 input_data = {item: step_outputs.get(item) for item in step.input}
@@ -109,10 +111,12 @@ def _hydrate_step(
         hydrated_step["dest_config"] = dests.get(hydrated_step["dest_config"])
 
     if "function" in hydrated_step:
-        hydrated_step["function"] = function_reg.get(hydrated_step["function"])
+        hydrated_step["function"] = function_reg.get("transform_fns").get(
+            hydrated_step["function"]
+        )
 
     if "email_builder" in hydrated_step:
-        hydrated_step["email_builder"] = function_reg.get(
+        hydrated_step["email_builder"] = function_reg.get("email_builders").get(
             hydrated_step["email_builder"]
         )
 
@@ -149,21 +153,3 @@ def _resolve_path_from_params(path: str, params: dict, macro_reg: dict) -> str:
             resolved_path = resolved_path.replace(placeholder, replacement_value)
 
     return resolved_path
-
-
-def _macro_school_year():
-    cur_date = datetime.now()
-    cur_month = cur_date.month
-    if cur_month <= 7:
-        return cur_date.year
-    else:
-        return cur_date.year + 1
-
-
-def _macro_yyyymmdd():
-    cur_date = datetime.now()
-    string = cur_date.strftime("%Y%M%D")
-    return string
-
-
-macro_registry = {"SCHOOL_YEAR": _macro_school_year, "YYYYMMDD": _macro_yyyymmdd}
