@@ -2,6 +2,10 @@ import pandas as pd
 from pathlib import Path
 from email.message import Message
 import logging
+import io
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
 from config import data_bridge_config
 from app.utils.models import StreamData
 from app.utils.transformutils import df_to_csv_buffer
@@ -78,9 +82,32 @@ def transform_fn_4(data: dict[str, StreamData]) -> dict[str, StreamData]:
     pass
 
 
-def build_teacher_email(email_data: dict[str, StreamData]) -> Message:
-    # ... logic to build and return the teacher email Message object ...
-    pass
+def build_teacher_email(
+    dest_config: dict, load_data: StreamData | list[StreamData], email_params: dict
+) -> Message:
+    msg = MIMEMultipart()
+    msg["From"] = send_from
+    msg["To"] = COMMASPACE.join(send_to)
+    msg["Date"] = formatdate(localtime=True)
+    msg["Subject"] = subject
+    msg.attach(MIMEText(text))
+
+    file_buffers = {}
+    for data_item in load_data:
+        if data_item.data_format == "dataframe":
+            file_buffers[] = df_to_csv_buffer(data_item.content)
+        if data_item.data_format == "file_path":
+            with open(data_item.content) as file:
+                file_buffer = io.BytesIO(file)
+                file_buffer.seek(0)
+                data_item = file_buffer
+
+    for buffer in load_data:
+        attachment = MIMEApplication(buffer)
+        attachment["Content-Disposition"] = 'attachment; filename="file_name.csv"'
+        msg.attach(attachment)
+    
+    return msg
 
 
 def build_admin_email(email_data: dict[str, StreamData]) -> Message:

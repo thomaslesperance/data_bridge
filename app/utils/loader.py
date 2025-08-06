@@ -1,8 +1,13 @@
 import shutil
 import pysftp
+import smtplib
+import io
 from logger import logger
 from models import LoadStep, StreamData, DestinationResponse
 from transformutils import df_to_csv_buffer
+
+
+from email.utils import COMMASPACE, formatdate
 
 
 class Loader:
@@ -23,32 +28,113 @@ class Loader:
         )
         return dest_response
 
-    def _smtp_load(self, dest_config, message) -> DestinationResponse:
-        """message: email.message.Message"""
-        pass
-
-    def _share_load(
-        self, dest_config, load_data: dict[str, StreamData]
+    @classmethod
+    def _smtp_load(
+        cls, load_step_config, step_outputs, macro_registry
     ) -> DestinationResponse:
-        for file_name, stream_data in load_data.items():
-            if stream_data.data_format == "dataframe":
-                file_data = df_to_csv_buffer(stream_data.content)
-            remote_file = dest_config.mount_path / file_name
-            shutil.copyfileobj(file, remote_file)
+        """message: email.message.Message"""
+        raw_email_params = load_step_config.get("email_params")
+        resolved_email_params = cls._resolve_email_params(
+            raw_query_params=raw_email_params,
+            step_outputs=step_outputs,
+            macro_registry=macro_registry,
+        )
+        dest_config = load_step_config.dest_config
+        load_data = [step_outputs[item] for item in load_step_config.input]
+        email_message_obj = load_step_config.email_builder(
+            dest_config, load_data, resolved_email_params
+        )
 
-    def _sftp_load(self, dest_config, load_data) -> DestinationResponse:
-        pass
-        # with pysftp.Connection(**THIRD_FUTURE_SFTP) as sftp:
-        #     with sftp.cd(DISCIPLINE_REMOTE_PATH):
-        #         sftp.putfo(
-        #             disc_csv_buffer, f"{DISCIPLINE_REMOTE_PATH}/{DISCIPLINE_FILE_NAME}"
-        #         )
-        #     with sftp.cd(ATTENDANCE_REMOTE_PATH):
-        #         sftp.putfo(
-        #             att_csv_buffer, f"{ATTENDANCE_REMOTE_PATH}/{ATTENDANCE_FILE_NAME}"
-        #         )
+        with smtplib.SMTP(dest_config.host, int(dest_config.port)) as smtp:
+            smtp.starttls()
+            smtp.login(dest_config.user, dest_config.password)
+            smtp.sendmail(
+                from_addr=dest_config.default_sender_email,
+                to_addrs=resolved_email_params.recipients,
+                msg=email_message_obj.as_bytes(),
+            )
 
-    def _drive_load(self, dest_config, load_data) -> DestinationResponse:
+    @classmethod
+    def _share_load(
+        cls, load_step_config, step_outputs, macro_registry
+    ) -> DestinationResponse:
+        load_data = step_outputs[load_step_config.input]
+        mount_path = load_step_config.dest_config.mount_path
+        remote_file_path = load_step_config.remote_file_path
+        remote_file = f"{mount_path}/{remote_file_path}"
+        dest_name = load_step_config.dest_config.name
+
+        try:
+            if load_data.data_format == "dataframe":
+                file_buffer = df_to_csv_buffer(load_data.content)
+                shutil.copyfileobj(file_buffer, remote_file)
+
+            if load_data.data_format == "file_buffer":
+                load_data.content.seek(0)
+                shutil.copyfileobj(load_data.content, remote_file)
+
+            if load_data.data_format == "file_path":
+                shutil.copy(load_data.content, remote_file)
+        except Exception as e:
+            return DestinationResponse(
+                destination_name=dest_name,
+                status="failure",
+                message=f"LOAD FAILED: File {remote_file} not loaded to '{dest_name}':\n\t{e}",
+                records_processed=None,
+            )
+        return DestinationResponse(
+            destination_name=dest_name,
+            status="success",
+            message=f"LOAD SUCCESSFUL: File {remote_file} loaded to '{dest_name}'",
+            records_processed=1,
+        )
+
+    @classmethod
+    def _sftp_load(
+        cls, load_step_config, step_outputs, macro_registry
+    ) -> DestinationResponse:
+        load_data = step_outputs[load_step_config.input]
+        mount_path = load_step_config.dest_config.mount_path
+        remote_file_path = load_step_config.remote_file_path
+        remote_file = f"{mount_path}/{remote_file_path}"
+        dest_name = load_step_config.dest_config.name
+        sftp_config = {
+            key: value
+            for key, value in load_step_config.dest_config.items()
+            if key in ("user", "password", "host", "port")
+        }
+
+        try:
+            with pysftp.Connection(**sftp_config) as sftp:
+                with sftp.cd(mount_path):
+                    if load_data.data_format == "dataframe":
+                        file_buffer = df_to_csv_buffer(load_data.content)
+                        sftp.putfo(file_buffer, remote_file_path)
+
+                    if load_data.data_format == "file_buffer":
+                        load_data.content.seek(0)
+                        sftp.putfo(load_data.content, remote_file_path)
+
+                    if load_data.data_format == "file_path":
+                        sftp.put(load_data.content, remote_file_path)
+        except Exception as e:
+            return DestinationResponse(
+                destination_name=dest_name,
+                status="failure",
+                message=f"LOAD FAILED: File {remote_file} not loaded to '{dest_name}':\n\t{e}",
+                records_processed=None,
+            )
+        return DestinationResponse(
+            destination_name=dest_name,
+            status="success",
+            message=f"LOAD SUCCESSFUL: File {remote_file} loaded to '{dest_name}'",
+            records_processed=1,
+        )
+
+    @classmethod
+    def _drive_load(
+        cls, load_step_config, step_outputs, macro_registry
+    ) -> DestinationResponse:
         pass
 
 

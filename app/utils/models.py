@@ -26,6 +26,7 @@ import pandas as pd
 
 # ------------------- DATA SOURCE MODELS ---------------------------------
 class SourceSql(BaseModel):
+    name: str
     protocol: Literal["sql"]
     user: Secret
     password: Secret
@@ -34,6 +35,7 @@ class SourceSql(BaseModel):
 
 
 class SourceSmb(BaseModel):
+    name: str
     protocol: Literal["smb"]
     mount_path: str
 
@@ -48,6 +50,7 @@ class SourceSmb(BaseModel):
 
 
 class SourceGoogleDrive(BaseModel):
+    name: str
     protocol: Literal["google_drive"]
     access_token: Path
 
@@ -61,6 +64,7 @@ class SourceGoogleDrive(BaseModel):
 
 
 class SourceSftp(BaseModel):
+    name: str
     protocol: Literal["sftp"]
     user: Secret
     password: Secret
@@ -76,13 +80,17 @@ Source = Annotated[
 
 # ------------------- DATA DESTINATION MODELS ----------------------------
 class DestSmtp(BaseModel):
+    name: str
     protocol: Literal["smtp"]
     host: str
-    port: str = 25
+    user: Secret
+    password: Secret
+    port: str = "25"
     default_sender_email: EmailStr
 
 
 class DestSmb(BaseModel):
+    name: str
     protocol: Literal["smb"]
     mount_path: str
 
@@ -97,6 +105,7 @@ class DestSmb(BaseModel):
 
 
 class DestSftp(BaseModel):
+    name: str
     protocol: Literal["sftp"]
     host: str
     user: Secret
@@ -105,6 +114,7 @@ class DestSftp(BaseModel):
 
 
 class DestGoogleDrive(BaseModel):
+    name: str
     protocol: Literal["google_drive"]
     access_token: Path
 
@@ -263,7 +273,7 @@ class TransformFunc(BaseModel):
 
 
 class EmailBuilder(BaseModel):
-    function: Callable[[dict[str, "StreamData"]], Message]
+    function: Callable[[dict, "StreamData" | list["StreamData"], dict], Message]
 
     def __call__(self, email_data: dict[str, "StreamData"]) -> Message:
         return self.function(email_data)

@@ -3,6 +3,9 @@ from models import ExtractStep, StreamData
 import jaydebeapi
 import pandas as pd
 import re
+import io
+import shutil
+import pysftp
 
 
 class Extractor:
@@ -28,13 +31,30 @@ class Extractor:
         cls, extract_step_config, step_outputs=None, macro_registry=None
     ) -> StreamData:
         """Returns file io.BytesIO for StreamData.content type"""
+        remote_file = extract_step_config.remote_file_path
+        file_buffer = io.BytesIO()
+        shutil.copyfileobj(remote_file, file_buffer)
+        file_buffer.seek(0)
+        return StreamData(data_format="file_buffer", content=file_buffer)
 
     @classmethod
     def _sftp_extract(
         cls, extract_step_config, step_outputs=None, macro_registry=None
     ) -> StreamData:
         """Returns file io.BytesIO for StreamData.content type"""
-        pass
+        sftp_config = {
+            key: value
+            for key, value in extract_step_config.source_config.items()
+            if key in ("user", "password", "host", "port")
+        }
+        mount_path = extract_step_config.source_config.mount_path
+        remote_file_path = extract_step_config.remote_file_path
+        file_buffer = io.BytesIO()
+        with pysftp.Connection(**sftp_config) as sftp:
+            with sftp.cd(mount_path):
+                sftp.getfo(remote_file_path, file_buffer)
+        file_buffer.seek(0)
+        return StreamData(data_format="file_buffer", content=file_buffer)
 
     @classmethod
     def _drive_extract(

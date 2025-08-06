@@ -15,6 +15,7 @@ data_bridge_config = {
     # Data Sources
     "sources": {
         "db1": {
+            "name": "db1",
             "protocol": "sql",
             "user": "user",
             "password": "password",
@@ -23,6 +24,7 @@ data_bridge_config = {
             # You do not need to specify JAR file abs path if CLASSPATH set in ~/.zprofile
         },
         "db2": {
+            "name": "db2",
             "protocol": "sql",
             "user": "user",
             "password": "password",
@@ -30,14 +32,17 @@ data_bridge_config = {
             "driver_name": "com.ddtek.jdbc.openedge.OpenEdgeDriver",
         },
         "fileshare": {
+            "name": "fileshare",
             "protocol": "smb",
             "mount_path": "/abs/path/to/share/root",
         },
         "google_drive_account": {
+            "name": "google_drive_account",
             "protocol": "google_drive",
             "access_token": CREDS_DIR / "token.pickle",
         },
         "sftp_server": {
+            "name": "sftp_server",
             "protocol": "sftp",
             "user": "user",
             "password": "password",
@@ -48,16 +53,21 @@ data_bridge_config = {
     # Data Destinations
     "destinations": {
         "smtp_server": {
+            "name": "smtp_server",
             "protocol": "smtp",
             "host": "smtp.domain.net",
+            "user": "user",
+            "password": "password",
             "port": "25",
             "default_sender_email": "jobs@example.com",
         },
         "fileshare": {
+            "name": "fileshare",
             "protocol": "smb",
             "mount_path": "/abs/path/to/share/root",
         },
         "sftp_server": {
+            "name": "sftp_server",
             "protocol": "sftp",
             "host": "123.456.789.1011",
             "user": "user",
@@ -65,6 +75,7 @@ data_bridge_config = {
             "port": "22",
         },
         "google_drive_account": {
+            "name": "google_drive_account",
             "protocol": "google_drive",
             "access_token": CREDS_DIR / "token.pickle",
         },
@@ -219,12 +230,9 @@ data_bridge_config = {
 #       (each are dicts)
 
 
-# ### ## 3. Enhance `Extractor` and `Loader` Classes
-# Update your core components to handle the logic defined in the new configuration.
-# * **Modify the `Extractor`:**
-#     * Update it to accept the resolved `params` dictionary.
-#     * Implement the safer custom solution for named SQL parameters, where you replace `:name` with `?` placeholders and pass the values securely to `cursor.execute()`.
-#     * Add logic to handle parameter substitution for fileshare paths.
-# * **Modify the `Loader`:**
-#     * Update it to handle the new configuration keys, such as `destination_path` for SFTP and fileshare loads.
-# ***
+# TODO:
+# Clean up all code
+# Review error handling and where to put decorators in new code
+# Review how and where to control data_format options for StreamData
+# Review where best to convert data_format amongst app components
+# Figure out how to specify file extension and file name in StreamData
