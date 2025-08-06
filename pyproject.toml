@@ -14,7 +14,7 @@ requires-python = "~=3.13"
 dependencies = [
     "pydantic~=2.11.5",
     "JayDeBeApi~=1.2.3",
-    "paramiko~=3.5.1",
+    "pysftp~=0.2.9",
     "pandas~=2.3.0",
     "pytest~=8.4.1",
     "pytest-mock~=3.14.1"

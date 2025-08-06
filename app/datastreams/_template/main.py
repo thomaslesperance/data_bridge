@@ -82,7 +82,7 @@ def transform_fn_4(data: dict[str, StreamData]) -> dict[str, StreamData]:
     pass
 
 
-def build_teacher_email(
+def email_builder_1(
     dest_config: dict, load_data: StreamData | list[StreamData], email_params: dict
 ) -> Message:
     msg = MIMEMultipart()
@@ -110,12 +110,16 @@ def build_teacher_email(
     return msg
 
 
-def build_admin_email(email_data: dict[str, StreamData]) -> Message:
+def email_builder_2(
+    dest_config: dict, load_data: StreamData | list[StreamData], email_params: dict
+) -> Message:
     # ... logic to build and return the admin email Message object ...
     pass
 
 
-def build_status_email(email_data: dict[str, StreamData]) -> Message:
+def email_builder_3(
+    dest_config: dict, load_data: StreamData | list[StreamData], email_params: dict
+) -> Message:
     # ... logic to build and return a simple status email ...
     pass
 
@@ -125,9 +129,9 @@ function_registry = {
     "transform_fn_2": transform_fn_2,
     "transform_fn_3": transform_fn_3,
     "transform_fn_4": transform_fn_4,
-    "build_teacher_email": build_teacher_email,
-    "build_admin_email": build_admin_email,
-    "build_status_email": build_status_email,
+    "email_builder_1": email_builder_1,
+    "email_builder_2": email_builder_2,
+    "email_builder_3": email_builder_3,
 }
 ## END EXAMPLE: ---------------------------------
 # ---------- END STREAM-SPECIFIC LOGIC ----------
