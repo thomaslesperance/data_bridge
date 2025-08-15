@@ -210,8 +210,6 @@ data_bridge_config = {
 
 
 # --- Config file rules ---
-# -- local paths are coerces to Path objects
-# -- remote paths are kept as str
 # Steps:
 # 1. All values are static except:
 # 2. Paths can have placeholders 'rel/path/to/report_::<placeholder_name>::.csv`
@@ -224,9 +222,9 @@ data_bridge_config = {
 #               "subject": "static value!",
 #           }
 #   Currently available param keys:
-#       path_params: str, or macro
-#       query_params: str, macro, or step
-#       email_params: str, macro, or step
+#       path_params: macro, step (str's could just be typed into the filepath)
+#       query_params: str, macro, step
+#       email_params str, macro, step
 #       (each are dicts)
 
 
@@ -244,22 +242,31 @@ data_bridge_config = {
 # THEN, DOES THAT CONTRACT SATISFY ALL POSSIBLE (REASONABLE) NEEDS FOR THIS APP
 # WHAT TOOLS AND METHODS DO PROFESSIONALS USE TO DO THIS SORT OF APP ARCHITECTURE/LOGIC/API DESIGN?
 
+# change to YAML config file
+# use environment variables
+# create prepare_config module that:
+#   reads yaml
+#   selects requested sources & dests
+#   enriches with environment variables
+#   runs pydantic validation
+#   returns validated stream_config object
+
 # email builder helper
-
 # change gets to [] except where defaults possible
-
 # figure out LogAndTerminate and if log and re-raise gives clean (or repeated and hard to read) error blocks in log file
-
-# Factor out param hydration for query and email params keys
-
+# Factor out and centralize param resolution
 # Use jaydebeapi query param tool (need new functions) and possibly sql util file
-
 # in datastream.py implement a dependency graph and ensure that every input required by a step corresponds to an output from a previous step
-
 # _share_load and _sftp_load methods contain almost identical logic for handling the different data_format types
-
 # variable names in signatures when viewed together with all functions in call stack; clean up
-
 # Look into `from __future__ import annotations` solution to type hint issue
-
 # type hint all methods with short but helpful doc strings
+
+# Put jobs in
+# Docker
+# Docker Hub
+# Docker Compose (lists each job as individual services)
+# Makefile?
+# Azure Key Vault, Azure Arc, Azure SDK (in Python?)
+# Github Actions
+# Windows Task Scheduler (schedule different services from Docker compose or)

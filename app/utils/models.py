@@ -139,26 +139,60 @@ class Stream(BaseModel):
     log_level: int = logging.INFO
     steps: list["Step"]
 
+# Remote file paths for extracting:
+# -Must be strings
+# -Must be relative (with respect to source config mount path)
+# -Must point to a file, not a directory (since you're grabbing a file from the destination)
 
-def check_is_sql_file(v: any) -> any:
+# Remote file paths for loading:
+# -Must be strings
+# -Must be relative (with respect to dest config mount path)
+# -Must point to a directory, not a file (since filename determined elsewhere)
+
+# Local file paths for query files:
+# -Must be strings
+# -Must be relative (with respect to main.py file of running data_stream)
+# -Must point to a file and not a directory
+# -Must end in '.sql'
+
+def is_sql_file(v: any) -> any:
     """Ensures the input string ends with .sql."""
     if not isinstance(v, str) or not v.endswith(".sql"):
-        raise ValueError(f"Path must be a string ending in .sql; got '{v}'")
+        raise ValueError(f"Path must be a string ending in '.sql'; got '{v}'")
     return v
 
-
-def validate_is_relative_path(v: str) -> str:
-    """Raises a ValueError if the path starts or ends with a slash."""
-    if v.startswith("/") or v.endswith("/"):
+def is_string(v: str) ->:
+    """Raises a ValueError if the path isn't a string."""
+    if not isinstance(v, str):
         raise ValueError(
-            f"Path must be relative and not start or end with '/', but got '{v}'"
+            f"Path must be a a relative string path pointing to a file, but got '{v}'"
+        )
+    return v
+
+def validate_is_relative_path_str(v: str) -> str:
+    """Raises a ValueError if the path isn't a relative starts or ends with a slash."""
+    if v.startswith("/") or v.endswith("/") or not isinstance(v, str):
+        raise ValueError(
+            f"Path must be a a relative string path pointing to a file, but got '{v}'"
         )
     return v
 
 
-RemoteRelPathStr = Annotated[str, AfterValidator(validate_is_relative_path)]
+def validate_is_relative_path_obj(v: str) -> str:
+    """Raises a ValueError if the path starts or ends with a slash."""
+    if v.startswith("/") or v.endswith("/") or not isinstance(v, Path):
+        raise ValueError(
+            f"Path must be a a relative Path object pointing to a file, but got '{v}'"
+        )
+    return v
+
+
+RemoteRelPathStr = Annotated[str, AfterValidator(validate_is_relative_path_str)]
+LocalRelPathStr = Annotated[str, AfterValidator(validate_is_relative_path_str)]
 RelativeSqlPath = Annotated[
-    Path, BeforeValidator(check_is_sql_file), BeforeValidator(validate_is_relative_path)
+    Path,
+    BeforeValidator(check_is_sql_file),
+    BeforeValidator(validate_is_relative_path_str),
 ]
 
 Step = Annotated[
@@ -197,32 +231,58 @@ class BaseExtractStep(BaseStep):
     step_type: Literal["extract"]
     protocol: str
     source_config: Source
-    output: str | list[str]
+    output_alias: str
+    data_format: str | None = None
+    output_file_name: str | None = None
 
 
 class SqlExtractStep(BaseExtractStep):
     protocol: Literal["sql"]
+    # Relative to the main.py file of running data_stream
     query_file_path: RelativeSqlPath
     path_params: dict[str, str] | None = None
     query_params: str | dict[str, str] | None = None
+    data_format: (
+        Literal["dataframe"] | Literal["file_buffer"] | Literal["file_path"]
+    ) = "dataframe"
+
+    @model_validator(mode="after")
+    def set_default_output_fil_name(self):
+        if self.output_file_name is None:
+            self.output_file_name = f"{self.output}.csv"
+        return self
 
 
 class SftpExtractStep(BaseExtractStep):
     protocol: Literal["sftp"]
+    # Relative to the mount_path of the destination
     remote_file_path: RemoteRelPathStr
     path_params: dict[str, str] | None = None
+    data_format: (
+        Literal["dataframe"] | Literal["file_buffer"] | Literal["file_path"]
+    ) = "file_buffer"
+    # Default output_file_name will be determined after path_params are resolved
 
 
 class SmbExtractStep(BaseExtractStep):
     protocol: Literal["smb"]
+    # Relative to the mount_path of the destination
     remote_file_path: RemoteRelPathStr
     path_params: dict[str, str] | None = None
+    data_format: (
+        Literal["dataframe"] | Literal["file_buffer"] | Literal["file_path"]
+    ) = "file_buffer"
+    # Default output_file_name will be determined after path_params are resolved
 
 
 class GoogleDriveExtractStep(BaseExtractStep):
     protocol: Literal["google_drive"]
     remote_file_path: RemoteRelPathStr
     path_params: dict[str, str] | None = None
+    data_format: (
+        Literal["dataframe"] | Literal["file_buffer"] | Literal["file_path"]
+    ) = "file_buffer"
+    # Default output_file_name will be determined after path_params are resolved
 
 
 ## ------------------- LOAD STEP MODELS ----------------------------------
