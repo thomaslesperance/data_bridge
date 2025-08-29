@@ -1,0 +1,229 @@
+globals:
+  log_file: app/data_streams/data_bridge.log
+
+sources:
+  db1: &db1
+    name: db1
+    protocol: sql
+    user: ${DB1_USER}
+    password: ${DB1_PASSWORD}
+    conn_string: ${DB1_CONN_STRING}
+    driver_name: com.ddtek.jdbc.openedge.OpenEdgeDriver
+
+  db2: &db2
+    name: db1
+    protocol: sql
+    user: ${DB2_USER}
+    password: ${DB2_PASSWORD}
+    conn_string: ${DB2_CONN_STRING}
+    driver_name: com.ddtek.jdbc.openedge.OpenEdgeDriver
+
+  fileshare1: &fileshare1
+    name: fileshare1
+    protocol: smb
+    mount_path: ${FILESHARE1_MOUNT_PATH}
+
+  google_drive_account1: &google_drive_account1
+    name: google_drive_account1
+    protocol: google_drive
+    access_token: ${GOOGLE_DRIVE_ACCOUNT1_TOKEN}
+
+  sftp1: &sftp1
+    name: sftp1
+    protocol: sftp
+    host: ${SFTP1_HOST}
+    user: ${SFTP1_USER}
+    password: ${SFTP1_PASSWORD}
+    port: ${SFTP1_PORT}
+
+destinations:
+  smtp1: &smtp1
+    name: smtp1
+    protocol: smtp
+    host: ${SMTP1_HOST}
+    user: ${SMTP1_USER}
+    password: ${SMTP1_PASSWORD}
+    port: ${SMTP1_PORT}
+    default_sender_email: ${SMTP1_DEFAULT_SENDER_EMAIL}
+
+  fileshare2: &fileshare2
+    name: fileshare2
+    protocol: smb
+    mount_path: ${FILESHARE2_MOUNT_PATH}
+
+  google_drive_account2: &google_drive_account2
+    name: google_drive_account2
+    protocol: google_drive
+    access_token: ${GOOGLE_DRIVE_ACCOUNT2_TOKEN}
+
+  sftp2: &sftp2
+    name: sftp2
+    protocol: sftp
+    host: ${SFTP2_HOST}
+    user: ${SFTP2_USER}
+    password: ${SFTP2_PASSWORD}
+    port: ${SFTP2_PORT}
+
+
+streams:
+  example_stream:
+    log_level: INFO
+    steps:
+      - step_name: get_no_email_list
+        step_type: extract
+        protocol: smb
+        source_config: *fileshare1
+        output: no_email_list_buffer
+        remote_file_path: "remote/rel/path/to/::school_year::_no_email_list.csv"
+        path_params:
+          school_year: "macro:SCHOOL_YEAR"
+      
+      - step_name: grades_initial_extract
+        step_type: extract
+        protocol: sql
+        source_config: *db1
+        output: raw_grades_data_df
+        query_file: grades.sql
+        query_params:
+          campus_code: "123"
+
+      - step_name: student_initial_extract
+        step_type: extract
+        protocol: sql
+        source_config: *db1
+        output: raw_students_data_df
+        query_file: students.sql
+        query_params:
+          campus_code: "123"
+      
+      - step_name: determine_high_achievers
+        step_type: transform
+        function: get_high_achiever_ids
+        input:
+          - raw_grades_data_df
+          - raw_students_data_df
+        output: high_achiever_ids_list
+
+      - step_name: determine_at_risk
+        step_type: transform
+        function: get_at_risk_ids
+        input:
+          - raw_grades_data_df
+          - raw_students_data_df
+        output: 
+          - at_risk_ids_list
+      
+      - step_name: generate_admin_report
+        step_type: transform
+        function: get_admin_report
+        input:
+          - raw_grades_data_df
+          - raw_students_data_df
+        output: 
+          - admin_report_buffer
+      
+      - step_name: high_ach_parent_ids
+        step_type: extract
+        protocol: sql
+        source_config: *db2
+        output: high_ach_parent_ids_df
+        query_file: high_ach_parents.sql
+        query_params:
+          student_ids: "step:high_achiever_ids_list"
+      
+      - step_name: at_risk_parent_ids
+        step_type: extract
+        protocol: sql
+        source_config: *db2
+        output: at_risk_parent_ids_df
+        query_file: at_risk_parents.sql
+        query_params:
+          student_ids: "step:at_risk_ids_list"
+
+      - step_name: convert_id_dfs
+        step_type: transform
+        function: get_id_lists
+        input:
+          - at_risk_parent_ids_df
+          - high_ach_parent_ids_df
+        output:
+          - at_risk_parent_ids_list
+          - high_ach_parent_ids_list
+
+      - step_name: build_raw_email_list
+        step_type: extract
+        protocol: sql
+        source_config: *db2
+        output: raw_email_list_df
+        query_file: mailing_list.sql
+        query_params:
+          at_risk_ids: "step:at_risk_parent_ids_list"
+          high_ach_ids: "step:high_ach_parent_ids_list"
+      
+      - step_name: filter_mailing_list
+        step_type: transform
+        function: filter_mailing_list
+        input:
+          - raw_email_list_df
+          - no_email_list_buffer
+        output: combined_email_list_df
+      
+      - step_name: build_high_ach_email
+        step_type: transform
+        function: build_high_ach_email
+        input:
+          - combined_email_list_df
+        output: high_ach_email_msg
+      
+      - step_name: build_at_risk_email
+        step_type: transform
+        function: build_at_risk_email
+        input:
+          - combined_email_list_df
+        output: at_risk_email_msg
+      
+      - step_name: send_at_risk_email
+        step_type: load
+        protocol: smtp
+        dest_config: *smtp1
+        input: at_risk_email_msg
+
+      - step_name: send_high_ach_email
+        step_type: load
+        protocol: smtp
+        dest_config: *smtp1
+        input: high_ach_email_msg
+        
+      - step_name: load_admin_report
+        step_type: load
+        protocol: smb
+        dest_config: *fileshare2
+        input: admin_report_buffer
+        remote_file_path: "archive/123/admin_reports/::date::_admin_report.csv"
+        path_params:
+          date: "macro:YYYYMMDD"
+
+
+# Extract steps:
+#   Give output in a set data_format based on protocol
+#   Output a single StreamData object
+
+# Transform steps:
+#   Change data_format to what receiving load step(s) expect
+#   Input and output multiple StreamData objects
+
+# Load steps:
+#   Expect input in a set data_format based on protocol
+#   Input a single StreamData object
+
+# Query params:
+#   A hard-coded value in the config file
+#   A "macro:" value
+#   A "step:" value that references a StreamData object with a "python_" data_format
+
+# Path params:
+#   A hard-coded value in the config file
+#   A "macro:" value
+#   A "step:" value that references a StreamData object with a "python_" data_format
+
+# No more email_params
