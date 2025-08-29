@@ -1,10 +1,6 @@
 # Directory structure
-test/
 venv/
 dist/
-
-app/datastreams/*
-!app/datastreams/_template/
 
 creds/*
 !creds/creds_placeholder.txt
@@ -15,9 +11,6 @@ drivers/*
 
 # Config and credentials
 .env
-config.ini
-config.py
-config.*
 *.pickle
 *.token
 *.json
