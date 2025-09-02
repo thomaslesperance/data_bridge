@@ -173,62 +173,71 @@ path_params:
 
 
 # --- Config file rules ---
-# Steps:
-# 1. All values are static except:
-# 2. Paths can have placeholders 'rel/path/to/report_::<placeholder_name>::.csv`
-# 3. "..._params" keys are dicts of strings whose values are either static or dynamic:
 # Dynamic options:
 #       macro: run a pre-defined fuction with given name to use it's return value here
 #       step: use the data in the data_store object under this name
-#           "email_params": {
-#               "recipients": "step:ref_to_previous_step_output"  <-- required
-#               "subject": "static value!",
-#           }
-#   Currently available param keys:
-#       path_params: macro, step (str's could just be typed into the filepath)
-#       query_params: str, macro, step
-#       email_params str, macro, step
-#       (each are dicts)
+
+# Remote file paths for extracting:
+# -Must be strings
+# -Must be relative (with respect to source config mount path)
+# -Must point to a file, not a directory (since you're grabbing a file from the destination)
+
+# Remote file paths for loading:
+# -Must be strings
+# -Must be relative (with respect to dest config mount path)
+# -Must point to a directory, not a file (since filename determined elsewhere)
+
+# Local file paths for query files:
+# -Must be strings
+# -Must be relative (with respect to main.py file of running data_stream)
+# -Must point to a file and not a directory
+# -Must end in '.sql'
+
+# Extract steps:
+#   Give output in a set data_format based on protocol
+#   Output a single StreamData object
+
+# Transform steps:
+#   Change data_format to what receiving load step(s) expect
+#   Input and output multiple StreamData objects
+#   Manually set file names
+
+# Load steps:
+#   Expect input in a set data_format based on protocol
+#   Input a single StreamData object
+#   Options for 'recipients' key where protocol='smtp':
+#       Hard-coded email
+#       Hard-coded list of emails
+#       A "step:" value that references a previous step output: StreamData.data_format="python_list"
+
+# Query params:
+#   A hard-coded value in the config file
+#   A "macro:" value
+#   A "step:" value that references a previous step output: StreamData.data_format="python_<any>"
+
+# Log levels
+# https://docs.python.org/3/library/logging.html#logging-levels
 
 
 # TODO:
 
-# file name & data_format architectural update
-#   extract step config can optionally set data_format and filename (might need crosschecking if both specified)
-#   transform step config sets neither as user makes this explicit in functions
-#   load step config can optionally specify final file name(s); data formats are coerced based on load method
-#       Need to figure out issue of multiple inputs (only needed with email steps, but might be helpful in general
-#       Will file type be an issue and if so will the suffix on filename be sufficient?
-#       Will email steps mess things up since they are also user-defined
-# I THINK THE KEY HERE (to avoid reworking the app over and over) IS TO UNDERSTAND THE CONTRACT BETWEEN:
-# THE CONFIG FILE, THE APP METHOD BEHAVIOR, AND THE DATASTREAM OBJECT
-# THEN, DOES THAT CONTRACT SATISFY ALL POSSIBLE (REASONABLE) NEEDS FOR THIS APP
-# WHAT TOOLS AND METHODS DO PROFESSIONALS USE TO DO THIS SORT OF APP ARCHITECTURE/LOGIC/API DESIGN?
-
-# change to YAML config file
-# use environment variables
-# create prepare_config module that:
-#   reads yaml
-#   selects requested sources & dests
-#   enriches with environment variables
-#   runs pydantic validation
-#   returns validated stream_config object
-
 # email builder helper
-# change gets to [] except where defaults possible
 # figure out LogAndTerminate and if log and re-raise gives clean (or repeated and hard to read) error blocks in log file
-# Factor out and centralize param resolution
+# Clean up where possible (extractor and loader)
+# type hint all methods with short but helpful doc strings
+# variable names in signatures when viewed together with all functions in call stack; clean up
+
+## Maybe's:
+# Factor out and centralize 'step:' resolution?
 # Use jaydebeapi query param tool (need new functions) and possibly sql util file
 # in datastream.py implement a dependency graph and ensure that every input required by a step corresponds to an output from a previous step
 # _share_load and _sftp_load methods contain almost identical logic for handling the different data_format types
-# variable names in signatures when viewed together with all functions in call stack; clean up
-# Look into `from __future__ import annotations` solution to type hint issue
-# type hint all methods with short but helpful doc strings
+
 
 # Put jobs in
 # Docker
 # Docker Hub
-# Docker Compose (lists each job as individual services)
+# ? Docker Compose (development) (lists each job as individual services?)
 # Makefile?
 # Azure Key Vault, Azure Arc, Azure SDK (in Python?)
 # Github Actions

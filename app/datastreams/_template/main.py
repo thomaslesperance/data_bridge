@@ -1,32 +1,37 @@
 from pathlib import Path
-import logging
 
-from config import data_bridge_config
-from .functionregistry import function_registry
+from app.utils.config import get_stream_config
 from app.utils.logger import get_configured_logger
-from app.utils.datastream import create_data_stream
+from app.utils.datastream import DataStream
+from .streamfunctions import stream_functions
 
 
 def main():
     try:
         stream_name = Path(__file__).resolve().parent.stem
-        log_file = (data_bridge_config.globals.log_file | f"{stream_name}.log",)
-        log_level = (
-            data_bridge_config.get("streams", {})
-            .get(stream_name, {})
-            .get("log_level", logging.INFO),
+
+        config_file = (
+            Path(__file__).resolve().parent.parent.parent.parent / "config.yaml"
         )
+
+        stream_config = get_stream_config(
+            stream_name=stream_name,
+            config_file=config_file,
+            stream_functions=stream_functions,
+        )
+
         logger = get_configured_logger(
             stream_name=stream_name,
-            log_file=log_file,
-            log_level=log_level,
+            log_file=stream_config.log_file,
+            log_level=stream_config.log_level,
         )
-        data_stream = create_data_stream(
+
+        data_stream = DataStream(
             stream_name=stream_name,
-            raw_config=data_bridge_config,
+            stream_config=stream_config,
             stream_logger=logger,
-            raw_functions=function_registry,
         )
+
         data_stream.run()
 
     except Exception as e:

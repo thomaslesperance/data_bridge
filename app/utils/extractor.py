@@ -4,31 +4,23 @@ import shutil
 import jaydebeapi
 import pandas as pd
 import pysftp
-from .models import ExtractStep, StreamData
+from app.utils.models import ExtractStep, StreamData
+from app.utils.macros import macro_registry
 
 
 class Extractor:
 
     @classmethod
     def extract(
-        cls,
-        extract_step_config: ExtractStep,
-        step_outputs: dict[str, StreamData],
-        macro_registry: dict[str, callable],
+        cls, extract_step_config: ExtractStep, step_outputs: dict[str, StreamData]
     ) -> StreamData:
-        protocol = extract_step_config.get("protocol")
-        extract_method = cls.protocol_to_method.get(protocol)
-        extracted_data = extract_method(
-            extract_step_config=extract_step_config,
-            step_outputs=step_outputs,
-            macro_registry=macro_registry,
-        )
+        protocol = extract_step_config.protocol
+        extract_method = cls.protocol_to_method[protocol]
+        extracted_data = extract_method(extract_step_config, step_outputs)
         return extracted_data
 
     @classmethod
-    def _fileshare_extract(
-        cls, extract_step_config, step_outputs=None, macro_registry=None
-    ) -> StreamData:
+    def _fileshare_extract(cls, extract_step_config, step_outputs=None) -> StreamData:
         """Returns file io.BytesIO for StreamData.content type"""
         remote_file = extract_step_config.remote_file_path
         file_buffer = io.BytesIO()
@@ -37,9 +29,7 @@ class Extractor:
         return StreamData(data_format="file_buffer", content=file_buffer)
 
     @classmethod
-    def _sftp_extract(
-        cls, extract_step_config, step_outputs=None, macro_registry=None
-    ) -> StreamData:
+    def _sftp_extract(cls, extract_step_config, step_outputs=None) -> StreamData:
         """Returns file io.BytesIO for StreamData.content type"""
         sftp_config = {
             key: value
@@ -47,7 +37,7 @@ class Extractor:
             if key in ("user", "password", "host", "port")
         }
         mount_path = extract_step_config.source_config.mount_path
-        remote_file_path = extract_step_config.remote_file_path
+        remote_file_path = extract_step_config.remote_file
         file_buffer = io.BytesIO()
         with pysftp.Connection(**sftp_config) as sftp:
             with sftp.cd(mount_path):
@@ -56,25 +46,19 @@ class Extractor:
         return StreamData(data_format="file_buffer", content=file_buffer)
 
     @classmethod
-    def _drive_extract(
-        cls, extract_step_config, step_outputs=None, macro_registry=None
-    ) -> StreamData:
+    def _drive_extract(cls, extract_step_config, step_outputs=None) -> StreamData:
         """Returns file io.BytesIO for StreamData.content type"""
         pass
 
     @classmethod
-    def _sql_extract(
-        cls, extract_step_config, step_outputs, macro_registry
-    ) -> StreamData:
+    def _sql_extract(cls, extract_step_config, step_outputs=None) -> StreamData:
         """Returns pd.DataFrame for StreamData.content type"""
-        raw_query_params = extract_step_config.get("query_params")
+        raw_query_params = extract_step_config.query_params
         resolved_query_params = cls._resolve_query_params(
-            raw_query_params=raw_query_params,
-            step_outputs=step_outputs,
-            macro_registry=macro_registry,
+            raw_query_params, step_outputs
         )
 
-        raw_query_string = extract_step_config.query_file_path.read_text()
+        raw_query_string = extract_step_config.query_file.read_text()
         resolved_query_string = cls._hydrate_query_with_params(
             raw_query_string, resolved_query_params
         )
@@ -106,13 +90,13 @@ class Extractor:
 
     @classmethod
     def _resolve_query_params(
-        cls, raw_query_params, step_outputs, macro_registry
+        cls, raw_query_params, step_outputs
     ) -> dict[str, str | StreamData]:
         resolved_query_params = {}
         for key, value in raw_query_params.items():
             if value.startswith("step:"):
                 output_name = value.replace("step:", "")
-                resolved_query_params.update({key: step_outputs[output_name]})
+                resolved_query_params.update({key: step_outputs[output_name].content})
             if value.startswith("macro:"):
                 macro_name = value.replace("macro:", "")
                 resolved_query_params.update({key: macro_registry[macro_name]()})

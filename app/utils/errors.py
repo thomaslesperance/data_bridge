@@ -1,6 +1,6 @@
-import functools
-import sys
-from .logger import logger
+from functools import wraps
+from sys import exit
+from app.utils.logger import logger
 
 
 class LogAndTerminate:
@@ -9,7 +9,7 @@ class LogAndTerminate:
         self.log_message = log_message
 
     def __call__(self, func) -> callable:
-        @functools.wraps(func)
+        @wraps(func)
         def wrapper(*args, **kwargs):
             """
             Executes the stored function inside a try/except block; logs exception.
@@ -21,6 +21,6 @@ class LogAndTerminate:
                 self.logger.exception(
                     f"{self.log_message or default_log_message}:\n\t\t'{e}'\n"
                 )
-                sys.exit(1)
+                exit(1)
 
         return wrapper

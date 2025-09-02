@@ -1,4 +1,4 @@
-globals:
+globals: &globals
   log_file: app/data_streams/data_bridge.log
 
 sources:
@@ -67,16 +67,15 @@ destinations:
 
 streams:
   example_stream:
-    log_level: INFO
+    <<: *globals
+    log_level: 20
     steps:
       - step_name: get_no_email_list
         step_type: extract
         protocol: smb
         source_config: *fileshare1
         output: no_email_list_buffer
-        remote_file_path: "remote/rel/path/to/::school_year::_no_email_list.csv"
-        path_params:
-          school_year: "macro:SCHOOL_YEAR"
+        remote_file: "remote/rel/path/to/2026_no_email_list.csv"
       
       - step_name: grades_initial_extract
         step_type: extract
@@ -173,57 +172,38 @@ streams:
         function: build_high_ach_email
         input:
           - combined_email_list_df
-        output: high_ach_email_msg
+        output: 
+          - high_ach_email_msg
+          - high_ach_email_recipients
       
       - step_name: build_at_risk_email
         step_type: transform
         function: build_at_risk_email
         input:
           - combined_email_list_df
-        output: at_risk_email_msg
+        output: 
+          - at_risk_email_msg
+          - at_risk_email_recipients
       
       - step_name: send_at_risk_email
         step_type: load
         protocol: smtp
         dest_config: *smtp1
         input: at_risk_email_msg
+        recipients:
+          - "admin@domain.net"
+          - "step:at_risk_email_recipients"
 
       - step_name: send_high_ach_email
         step_type: load
         protocol: smtp
         dest_config: *smtp1
         input: high_ach_email_msg
+        recipients: "step:high_ach_email_recipients"
         
       - step_name: load_admin_report
         step_type: load
         protocol: smb
         dest_config: *fileshare2
         input: admin_report_buffer
-        remote_file_path: "archive/123/admin_reports/::date::_admin_report.csv"
-        path_params:
-          date: "macro:YYYYMMDD"
-
-
-# Extract steps:
-#   Give output in a set data_format based on protocol
-#   Output a single StreamData object
-
-# Transform steps:
-#   Change data_format to what receiving load step(s) expect
-#   Input and output multiple StreamData objects
-
-# Load steps:
-#   Expect input in a set data_format based on protocol
-#   Input a single StreamData object
-
-# Query params:
-#   A hard-coded value in the config file
-#   A "macro:" value
-#   A "step:" value that references a StreamData object with a "python_" data_format
-
-# Path params:
-#   A hard-coded value in the config file
-#   A "macro:" value
-#   A "step:" value that references a StreamData object with a "python_" data_format
-
-# No more email_params
+        remote_dir: "archive/123/admin_reports/"
