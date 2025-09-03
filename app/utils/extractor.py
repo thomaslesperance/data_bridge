@@ -53,23 +53,33 @@ class Extractor:
     @classmethod
     def _sql_extract(cls, extract_step_config, step_outputs=None) -> StreamData:
         """Returns pd.DataFrame for StreamData.content type"""
-        raw_query_params = extract_step_config.query_params
-        resolved_query_params = cls._resolve_query_params(
+        raw_query_params = extract_step_config.query_params or {}
+        resolved_params = cls._resolve_query_params(
             raw_query_params, step_outputs
         )
 
-        raw_query_string = extract_step_config.query_file.read_text()
-        resolved_query_string = cls._hydrate_query_with_params(
-            raw_query_string, resolved_query_params
-        )
+        query_string = extract_step_config.query_file.read_text()
+        final_params = []
+
+        for key, value in resolved_params.items():
+            placeholder = f"::{key}::"
+            if isinstance(value, list):
+                question_marks = ", ".join("?" for _ in value)
+                query_string = query_string.replace(placeholder, f"{question_marks}")
+                final_params.extend(value)
+            else:
+                query_string = query_string.replace(placeholder "?")
+                final_params.append(value)
 
         source_config = extract_step_config.source_config
-        data_frame = cls._query_database(source_config, resolved_query_string)
+        data_frame = cls._query_database(source_config, query_string, final_params)
 
         return StreamData(data_format="dataframe", content=data_frame)
 
     @classmethod
-    def _query_database(cls, source_config: dict, query_string: str) -> pd.DataFrame:
+    def _query_database(
+        cls, source_config: dict, query_string: str, params: list
+    ) -> pd.DataFrame:
         with jaydebeapi.connect(
             jclassname=source_config.driver_name,
             url=source_config.conn_string,
@@ -77,7 +87,7 @@ class Extractor:
         ) as conn:
             dtypes = cls._get_dtypes_from_query_map(query_string, conn)
             with conn.cursor() as curs:
-                curs.execute(query_string)
+                curs.execute(query_string, params)
                 data = curs.fetchall()
 
                 if isinstance(data, tuple):
@@ -89,43 +99,18 @@ class Extractor:
         return df
 
     @classmethod
-    def _resolve_query_params(
-        cls, raw_query_params, step_outputs
-    ) -> dict[str, str | StreamData]:
-        resolved_query_params = {}
+    def _resolve_query_params(cls, raw_query_params, step_outputs) -> dict:
+        resolved_params = {}
         for key, value in raw_query_params.items():
             if value.startswith("step:"):
                 output_name = value.replace("step:", "")
-                resolved_query_params.update({key: step_outputs[output_name].content})
-            if value.startswith("macro:"):
+                resolved_params.update({key: step_outputs[output_name].content})
+            elif value.startswith("macro:"):
                 macro_name = value.replace("macro:", "")
-                resolved_query_params.update({key: macro_registry[macro_name]()})
+                resolved_params.update({key: macro_registry[macro_name]()})
             else:
-                resolved_query_params.update({key: value})
-        return resolved_query_params
-
-    @classmethod
-    def _hydrate_query_with_params(
-        cls, raw_query_string: str, resolved_query_params: dict[str, str | StreamData]
-    ) -> str:
-        resolved_query_string = raw_query_string
-        for key, value in resolved_query_params.items():
-            if isinstance(value, StreamData):
-                if value.data_format == "python_string":
-                    resolved_query_string.replace(f"::{key}::", f"'{value}'")
-                if value.data_format == "python_int":
-                    resolved_query_string.replace(f"::{key}::", f"{value}")
-                if value.data_format == "python_list":
-                    combined_string = cls._get_combined_param_string(value)
-                    resolved_query_string.replace(f"::{key}::", combined_string)
-            else:
-                resolved_query_string.replace(f"::{key}::", value)
-        return resolved_query_string
-
-    @classmethod
-    def _get_combined_param_string(param_list: list):
-        single_quotes = [f"'{value}'" for value in param_list]
-        return ", ".join(single_quotes)
+                resolved_params.update({key: value})
+        return resolved_params
 
     @classmethod
     def _get_dtypes_from_query_map(cls, query_string: str, connection) -> dict:
