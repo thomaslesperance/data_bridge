@@ -1,6 +1,7 @@
 import re
 import io
 import shutil
+from pathlib import PurePath
 import jaydebeapi
 import pandas as pd
 import pysftp
@@ -24,24 +25,21 @@ class Extractor:
         """Returns file io.BytesIO for StreamData.content type"""
         remote_file = extract_step_config.remote_file_path
         file_buffer = io.BytesIO()
-        shutil.copyfileobj(remote_file, file_buffer)
+        with open(remote_file, 'wb') as f:
+            shutil.copyfileobj(f, file_buffer)
         file_buffer.seek(0)
         return StreamData(data_format="file_buffer", content=file_buffer)
 
     @classmethod
     def _sftp_extract(cls, extract_step_config, step_outputs=None) -> StreamData:
         """Returns file io.BytesIO for StreamData.content type"""
-        sftp_config = {
-            key: value
-            for key, value in extract_step_config.source_config.items()
-            if key in ("user", "password", "host", "port")
-        }
-        mount_path = extract_step_config.source_config.mount_path
-        remote_file_path = extract_step_config.remote_file
+        source_config = extract_step_config.source_config
+        sftp_config = source_config.model_dump(include={"user", "password", "host", "port"})
+        remote_file = str(PurePath(source_config.mount_path) / PurePath(extract_step_config.remote_file))
         file_buffer = io.BytesIO()
+
         with pysftp.Connection(**sftp_config) as sftp:
-            with sftp.cd(mount_path):
-                sftp.getfo(remote_file_path, file_buffer)
+            sftp.getfo(remote_file, file_buffer)
         file_buffer.seek(0)
         return StreamData(data_format="file_buffer", content=file_buffer)
 
@@ -54,9 +52,7 @@ class Extractor:
     def _sql_extract(cls, extract_step_config, step_outputs=None) -> StreamData:
         """Returns pd.DataFrame for StreamData.content type"""
         raw_query_params = extract_step_config.query_params or {}
-        resolved_params = cls._resolve_query_params(
-            raw_query_params, step_outputs
-        )
+        resolved_params = cls._resolve_query_params(raw_query_params, step_outputs)
 
         query_string = extract_step_config.query_file.read_text()
         final_params = []

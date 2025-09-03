@@ -219,26 +219,24 @@ path_params:
 # https://docs.python.org/3/library/logging.html#logging-levels
 
 
-# TODO:
-
-# email builder helper
-# figure out LogAndTerminate and if log and re-raise gives clean (or repeated and hard to read) error blocks in log file
+# --- TODO ---:
+# Finish email builder helper
 # Clean up where possible (extractor and loader)
-# type hint all methods with short but helpful doc strings
-# variable names in signatures when viewed together with all functions in call stack; clean up
+    # Factor out data_format checks from each load and extract method by adding a second item to each key
+    # in method map that specifies which data_format it accepts
+# type hint all methods, include short but helpful doc strings
+# clean up variable names in signatures across call stacks
+# implement dependency graph in config.py to ensure that every input required by a step corresponds to an output from a previous step
+# Put test jobs in for each extract/load type
+# Write unit tests
+# Complete README
 
-## Maybe's:
-# Factor out and centralize 'step:' resolution?
-# Use jaydebeapi query param tool (need new functions) and possibly sql util file
-# in datastream.py implement a dependency graph and ensure that every input required by a step corresponds to an output from a previous step
-# _share_load and _sftp_load methods contain almost identical logic for handling the different data_format types
-
-
-# Put jobs in
+# --- FUTUE TODO ---:
 # Docker
 # Docker Hub
-# ? Docker Compose (development) (lists each job as individual services?)
-# Makefile?
-# Azure Key Vault, Azure Arc, Azure SDK (in Python?)
+# Kubernetes / Docker Swarm
 # Github Actions
-# Windows Task Scheduler (schedule different services from Docker compose or)
+# Azure Key Vault, Azure Arc, Azure SDK (in Python?)
+# Scheduling system (schedule different services from Docker compose or)
+# ? Docker Compose (development) (lists each job as individual services?)
+# ? Makefile

@@ -170,8 +170,7 @@ streams:
       - step_name: build_high_ach_email
         step_type: transform
         function: build_high_ach_email
-        input:
-          - combined_email_list_df
+        input: combined_email_list_df
         output: 
           - high_ach_email_msg
           - high_ach_email_recipients
@@ -179,8 +178,7 @@ streams:
       - step_name: build_at_risk_email
         step_type: transform
         function: build_at_risk_email
-        input:
-          - combined_email_list_df
+        input: combined_email_list_df
         output: 
           - at_risk_email_msg
           - at_risk_email_recipients

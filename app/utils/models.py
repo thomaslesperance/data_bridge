@@ -63,8 +63,8 @@ class DestSmtp(BaseModel):
     name: str
     protocol: Literal["smtp"]
     host: str
-    user: Secret
-    password: Secret
+    user: Secret | None = None
+    password: Secret | None = None
     port: str = "25"
     default_sender_email: EmailStr
 
@@ -168,7 +168,7 @@ class BaseLoadStep(BaseStep):
     step_type: Literal["load"]
     protocol: str
     dest_config: Destination
-    input: str | list[str]
+    input: str
 
 
 class SmtpLoadStep(BaseLoadStep):
@@ -192,34 +192,30 @@ class GoogleDriveLoadStep(BaseLoadStep):
 
 
 ## ------------------- STEP UTILS ----------------------------------------
-def is_sql_file(v: any) -> any:
-    """Ensures the input string ends with .sql."""
+def no_starting_slash(v: str) -> str:
+    """Raises a ValueError if input string starts with a forward slash."""
+    if v.startswith("/"):
+        raise ValueError(f"Path must not start with '/'; got '{v}'")
+    return v
+
+
+def no_ending_slash(v: str) -> str:
+    """Raises a ValueError if input string ends with a forward slash."""
+    if v.endswith("/"):
+        raise ValueError(f"Path must not end with '/'; got '{v}'")
+    return v
+
+
+def has_sql_extension(v: any) -> any:
+    """Raises ValueError if input string doesn't end with .sql."""
     if not v.endswith(".sql"):
-        raise ValueError(f"Path must be a string ending in '.sql'; got '{v}'")
+        raise ValueError(f"Path must end with '.sql'; got '{v}'")
     return v
 
 
-def is_relative_file_path(v: str) -> str:
-    """Raises a ValueError if the path isn't a relative starts or ends with a slash."""
-    if v.startswith("/") or v.endswith("/"):
-        raise ValueError(
-            f"Path must be a a relative string path pointing to a file, but got '{v}'"
-        )
-    return v
-
-
-def is_relative_dir_path(v: str) -> str:
-    """Raises a ValueError if the path isn't a relative starts or ends with a slash."""
-    if v.startswith("/") or not v.endswith("/"):
-        raise ValueError(
-            f"Path must be a a relative string path pointing to a directory, but got '{v}'"
-        )
-    return v
-
-
-RelFilePath = Annotated[str, AfterValidator(is_relative_file_path)]
-RelDirPath = Annotated[str, AfterValidator(is_relative_dir_path)]
-RelSqlFilePath = Annotated[RelFilePath, BeforeValidator(is_sql_file)]
+RelDirPath = Annotated[str, AfterValidator(no_starting_slash)]
+RelFilePath = Annotated[RelDirPath, AfterValidator(no_ending_slash)]
+RelSqlFilePath = Annotated[RelFilePath, BeforeValidator(has_sql_extension)]
 
 
 # ------------------------------------------------------------------------
@@ -257,7 +253,7 @@ class StreamData(BaseModel):
         "dataframe",
         "file_buffer",
         "file_path",
-        "emai_message",
+        "email_message",
         "python_string",
         "python_int",
         "python_list",
