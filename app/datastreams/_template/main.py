@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from app.utils.config import get_stream_config
-from app.utils.logger import get_configured_logger
+from app.utils.logger import StreamLogger
 from app.utils.datastream import DataStream
 from .streamfunctions import stream_functions
 
@@ -9,6 +9,7 @@ from .streamfunctions import stream_functions
 def main():
     try:
         stream_name = Path(__file__).resolve().parent.stem
+        stream_logger = StreamLogger(stream_name)
 
         config_file = (
             Path(__file__).resolve().parent.parent.parent.parent / "config.yaml"
@@ -20,16 +21,13 @@ def main():
             stream_functions=stream_functions,
         )
 
-        logger = get_configured_logger(
-            stream_name=stream_name,
-            log_file=stream_config.log_file,
-            log_level=stream_config.log_level,
-        )
+        stream_logger.set_log_level(stream_config.log_level)
+        stream_logger.set_log_file(stream_config.log_file)
 
         data_stream = DataStream(
             stream_name=stream_name,
             stream_config=stream_config,
-            stream_logger=logger,
+            stream_logger=stream_logger.logger_instance,
         )
 
         data_stream.run()

@@ -1,7 +1,9 @@
 import shutil
-import pysftp
 import smtplib
 from pathlib import PurePath
+
+import pysftp
+
 from app.utils.models import LoadStep, StreamData, DestinationResponse
 from app.utils.macros import macro_registry
 
@@ -12,13 +14,19 @@ class Loader:
     def load(
         cls, load_step_config: LoadStep, step_outputs: dict[str, StreamData]
     ) -> DestinationResponse:
+        """
+        Main public method of Loader class that executes the load step described by the passed config using
+        the private method corresponding to the load protocol.
+        """
         protocol = load_step_config.protocol
         load_method = cls.protocol_to_method[protocol]
         dest_response = load_method(load_step_config, step_outputs)
         return dest_response
 
     @classmethod
-    def _smtp_load(cls, load_step_config, step_outputs) -> DestinationResponse:
+    def _smtp_load(
+        cls, load_step_config: LoadStep, step_outputs: dict[str, StreamData]
+    ) -> DestinationResponse:
         """Expects StreamData.data_format='email_message'"""
         smtp_config = load_step_config.dest_config
         from_addr = smtp_config.default_sender_email
@@ -57,7 +65,10 @@ class Loader:
         )
 
     @classmethod
-    def _resolve_email_recipients(recipients, step_outputs) -> list[str]:
+    def _resolve_email_recipients(
+        recipients, step_outputs: dict[str, StreamData]
+    ) -> list[str]:
+        """Replaces any references to previous step outputs for email recipients with actual values."""
         resolved_recipients = []
         if isinstance(recipients, str):
             recipients = [recipients]
@@ -73,7 +84,12 @@ class Loader:
         return resolved_recipients
 
     @classmethod
-    def _base_file_load(cls, load_step_config, step_outputs, protocol: str):
+    def _base_file_load(
+        cls,
+        load_step_config: LoadStep,
+        step_outputs: dict[str, StreamData],
+        protocol: str,
+    ):
         """Base logic for handling file-based loads."""
         load_data = step_outputs[load_step_config.input]
         dest_config = load_step_config.dest_config
@@ -93,7 +109,9 @@ class Loader:
         return load_data, remote_path, dest_name, dest_config
 
     @classmethod
-    def _share_load(cls, load_step_config, step_outputs) -> DestinationResponse:
+    def _share_load(
+        cls, load_step_config: LoadStep, step_outputs: dict[str, StreamData]
+    ) -> DestinationResponse:
         """Expects StreamData.data_format='file_buffer' or 'file_path'"""
         load_data, remote_file, dest_name, _ = cls._base_file_load(
             load_step_config, step_outputs, "smb"
@@ -121,7 +139,9 @@ class Loader:
         )
 
     @classmethod
-    def _sftp_load(cls, load_step_config, step_outputs) -> DestinationResponse:
+    def _sftp_load(
+        cls, load_step_config: LoadStep, step_outputs: dict[str, StreamData]
+    ) -> DestinationResponse:
         """Expects StreamData.data_format='file_buffer' or 'file_path'"""
         load_data, remote_file, dest_name, dest_config = cls._base_file_load(
             load_step_config, step_outputs, "sftp"
@@ -152,7 +172,10 @@ class Loader:
         )
 
     @classmethod
-    def _drive_load(cls, load_step_config, step_outputs) -> DestinationResponse:
+    def _drive_load(
+        cls, load_step_config: LoadStep, step_outputs: dict[str, StreamData]
+    ) -> DestinationResponse:
+        """Expects StreamData.data_format='file_buffer' or 'file_path'"""
         pass
 
 

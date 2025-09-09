@@ -1,8 +1,10 @@
 import os
 import re
 from pathlib import Path
+
 from yaml import safe_load
 from dotenv import load_dotenv
+
 from app.utils.errors import LogAndTerminate
 from app.utils.models import Stream, TransformFunc, EmailBuilder
 
@@ -14,8 +16,8 @@ def get_stream_config(
     stream_functions: dict[str, TransformFunc | EmailBuilder] = {},
 ) -> Stream:
     """
-    Parses .env file and config.py file, hydrates needed section with environment variables and
-    user-defined stream functions, passes hydrated config dict to pydantic model.
+    Parses .env file and config.yaml file, hydrates needed section with environment variables and
+    user-defined stream functions, passes hydrated config dict to pydantic model for validation.
     """
 
     load_dotenv()
@@ -35,7 +37,8 @@ def get_stream_config(
     return Stream(**raw_stream_config)
 
 
-def _env_var_substituter(match):
+def _env_var_substituter(match: re.Match) -> str:
+    """Returns environment variable value corresponding to name in match object passed."""
     var_name = match.group(1)
     value = os.getenv(var_name)
     if value is None:

@@ -2,9 +2,11 @@ import re
 import io
 import shutil
 from pathlib import PurePath
+
 import jaydebeapi
 import pandas as pd
 import pysftp
+
 from app.utils.models import ExtractStep, StreamData
 from app.utils.macros import macro_registry
 
@@ -15,13 +17,17 @@ class Extractor:
     def extract(
         cls, extract_step_config: ExtractStep, step_outputs: dict[str, StreamData]
     ) -> StreamData:
+        """
+        Main public method of Extractor class that executes the extract step described by the passed config using
+        the private method corresponding to the extract protocol.
+        """
         protocol = extract_step_config.protocol
         extract_method = cls.protocol_to_method[protocol]
         extracted_data = extract_method(extract_step_config, step_outputs)
         return extracted_data
 
     @classmethod
-    def _fileshare_extract(cls, extract_step_config, step_outputs=None) -> StreamData:
+    def _fileshare_extract(cls, extract_step_config: ExtractStep, step_outputs: dict[str, StreamData] = None) -> StreamData:
         """Returns file io.BytesIO for StreamData.content type"""
         remote_file = extract_step_config.remote_file_path
         file_buffer = io.BytesIO()
@@ -31,7 +37,7 @@ class Extractor:
         return StreamData(data_format="file_buffer", content=file_buffer)
 
     @classmethod
-    def _sftp_extract(cls, extract_step_config, step_outputs=None) -> StreamData:
+    def _sftp_extract(cls, extract_step_config: ExtractStep, step_outputs: dict[str, StreamData] = None) -> StreamData:
         """Returns file io.BytesIO for StreamData.content type"""
         source_config = extract_step_config.source_config
         sftp_config = source_config.model_dump(include={"user", "password", "host", "port"})
@@ -44,12 +50,12 @@ class Extractor:
         return StreamData(data_format="file_buffer", content=file_buffer)
 
     @classmethod
-    def _drive_extract(cls, extract_step_config, step_outputs=None) -> StreamData:
+    def _drive_extract(cls, extract_step_config: ExtractStep, step_outputs: dict[str, StreamData] = None) -> StreamData:
         """Returns file io.BytesIO for StreamData.content type"""
         pass
 
     @classmethod
-    def _sql_extract(cls, extract_step_config, step_outputs=None) -> StreamData:
+    def _sql_extract(cls, extract_step_config: ExtractStep, step_outputs: dict[str, StreamData] = None) -> StreamData:
         """Returns pd.DataFrame for StreamData.content type"""
         raw_query_params = extract_step_config.query_params or {}
         resolved_params = cls._resolve_query_params(raw_query_params, step_outputs)
@@ -76,6 +82,10 @@ class Extractor:
     def _query_database(
         cls, source_config: dict, query_string: str, params: list
     ) -> pd.DataFrame:
+        """
+        Executes the SQL query defined by the passed query string against the database defined by the 
+        passed source config using the passed query params.
+        """
         with jaydebeapi.connect(
             jclassname=source_config.driver_name,
             url=source_config.conn_string,
@@ -95,7 +105,8 @@ class Extractor:
         return df
 
     @classmethod
-    def _resolve_query_params(cls, raw_query_params, step_outputs) -> dict:
+    def _resolve_query_params(cls, raw_query_params: dict, step_outputs: dict[str, StreamData]) -> dict:
+        """Replaces any references to previous step outputs or a macro values with the actual values."""
         resolved_params = {}
         for key, value in raw_query_params.items():
             if value.startswith("step:"):
@@ -109,11 +120,10 @@ class Extractor:
         return resolved_params
 
     @classmethod
-    def _get_dtypes_from_query_map(cls, query_string: str, connection) -> dict:
+    def _get_dtypes_from_query_map(cls, query_string: str, connection: jaydebeapi.Connection) -> dict:
         """
-        Parses a special, well-formatted comment block in a SQL query to
-        determine data types. Relies on a strict line format convention.
-
+        Parses a special comment block in a SQL query to determine data types.
+        Relies on a strict format convention:
             --[ TABLE-COLUMN-ALIAS MAP ]
             --TABLE,COLUMN[,ALIAS]
             --...

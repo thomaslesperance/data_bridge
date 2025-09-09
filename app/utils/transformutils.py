@@ -1,10 +1,11 @@
 from io import BytesIO
 from email.message import EmailMessage
+
 from pandas import DataFrame
 
 
 def df_to_csv_buffer(
-    df: DataFrame, keep_df_index=False, encoding: str = "utf-8"
+    df: DataFrame, keep_df_index: bool = False, encoding: str = "utf-8"
 ) -> BytesIO:
     bytes_buffer = BytesIO()
     df.to_csv(bytes_buffer, index=keep_df_index, encoding=encoding)

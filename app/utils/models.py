@@ -1,8 +1,9 @@
 from io import BytesIO
 from uuid import uuid4
 from datetime import datetime
-from email.message import Message
+from email.message import EmailMessage
 from typing import Annotated, Union, Literal, Callable
+
 from pydantic import (
     BaseModel,
     Secret,
@@ -229,9 +230,9 @@ class TransformFunc(BaseModel):
 
 
 class EmailBuilder(BaseModel):
-    function: Callable[[dict[str, "StreamData"]], Message]
+    function: Callable[[dict[str, "StreamData"]], EmailMessage]
 
-    def __call__(self, email_data: dict[str, "StreamData"]) -> Message:
+    def __call__(self, email_data: dict[str, "StreamData"]) -> EmailMessage:
         return self.function(email_data)
 
 
@@ -239,16 +240,6 @@ class EmailBuilder(BaseModel):
 # ------------------- OPERATIONAL STATE MODELS ---------------------------
 # ------------------------------------------------------------------------
 class StreamData(BaseModel):
-    """
-    A standardized container for data flowing through the data stream.
-
-    Example uses of each data_format (and implied data type of content):
-        dataframe: SQL extractions will be converted into a pandas DataFrames by default;
-        file_buffer: Small files read from a Smb or SFTP server will be passed as byte buffers until processed;
-        file_path: Large files moved from one place to another need not be loaded into memory and can be streamed piecemeal;
-        python_<type>: For data transmitted between transform steps to eliminate redundant conversions;
-    """
-
     data_format: Literal[
         "dataframe",
         "file_buffer",
@@ -259,7 +250,7 @@ class StreamData(BaseModel):
         "python_list",
         "python_dict",
     ]
-    content: Union[pd.DataFrame, BytesIO, str, Message, str, int, list, dict]
+    content: Union[DataFrame, BytesIO, str, EmailMessage, str, int, list, dict]
     file_name: str = "no_file_name"
     metadata: dict = {}
 
@@ -276,9 +267,11 @@ class StreamData(BaseModel):
             raise ValueError("For 'file_buffer', content must be of type 'io.BytesIO'")
 
         # Check for email message
-        if self.data_format == "emai_message" and not isinstance(self.content, Message):
+        if self.data_format == "email_message" and not isinstance(
+            self.content, EmailMessage
+        ):
             raise ValueError(
-                "For 'emai_message', content must be of type 'email.message.Message'"
+                "For 'email_message', content must be of type 'email.message.EmailMessage'"
             )
 
         # Check for file
@@ -305,8 +298,6 @@ class StreamData(BaseModel):
 
 
 class DestinationResponse(BaseModel):
-    """A standardized model for reporting the outcome of a load operation."""
-
     destination_name: str
     status: Literal["success", "failure"]
     message: str

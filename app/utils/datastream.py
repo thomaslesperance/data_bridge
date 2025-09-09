@@ -1,5 +1,6 @@
 from logging import Logger
 from datetime import datetime
+
 from app.utils.models import Stream, DataStore
 from app.utils.errors import LogAndTerminate
 from app.utils.extractor import Extractor
@@ -7,13 +8,13 @@ from app.utils.loader import Loader
 
 
 class DataStream:
-    """A orchestrator class designed to manage the state and flow of data
-    throughout data stream steps.
-    """
-
     def __init__(
         self, stream_name: str, stream_config: Stream, stream_logger: Logger
     ) -> None:
+        """
+        Initializes an orchestrator class for the data stream that manages config, data, logging,
+        and exposes a 'run' method that executes stream steps.
+        """
 
         self.name = stream_name
         self.config = stream_config
@@ -25,6 +26,10 @@ class DataStream:
 
     @LogAndTerminate()
     def run(self) -> None:
+        """
+        Iterates through each step in stream config and calls the appropriate helper classes to
+        execute the step.
+        """
         for step in self.config.steps:
             step_outputs = self.data_store.step_outputs
 

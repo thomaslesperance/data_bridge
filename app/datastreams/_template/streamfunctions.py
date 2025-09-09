@@ -1,6 +1,8 @@
 from datetime import datetime
-from email.message import Message
+from email.message import EmailMessage
+
 import pandas as pd
+
 from app.utils.models import StreamData, TransformFunc, EmailBuilder
 from app.utils.transformutils import df_to_csv_buffer, build_email_msg
 from app.utils.macros import macro_registry
@@ -18,7 +20,7 @@ def transform_fn_3(data: dict[str, StreamData]) -> dict[str, StreamData]:
     pass
 
 
-def email_builder_1(email_data: dict[str, "StreamData"]) -> Message:
+def email_builder_1(email_data: dict[str, "StreamData"]) -> EmailMessage:
     pass
 
 

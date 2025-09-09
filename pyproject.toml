@@ -8,7 +8,7 @@ version = "0.0.1"
 authors = [
     { name = "Thomas L'Esperance", email = "tmles2023@gmail.com" },
 ]
-description = "A data integration pipeline capable of integrating data between multiple sources and multiple destinations. The project features pandas for custom data transformations to be added to each integration element and pydantic for config file validation."
+description = "A data integration pipeline capable of integrating data between multiple sources and multiple destinations."
 readme = "README.md"
 requires-python = "~=3.13"
 dependencies = [
