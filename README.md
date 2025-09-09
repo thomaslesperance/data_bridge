@@ -206,8 +206,8 @@ path_params:
 #   Expect input in a set data_format based on protocol
 #   Input a single StreamData object
 #   Options for 'recipients' key where protocol='smtp':
-#       Hard-coded email
-#       Hard-coded list of emails
+#       Hard-coded email address
+#       Hard-coded list of email addresses
 #       A "step:" value that references a previous step output: StreamData.data_format="python_list"
 
 # Query params:
@@ -220,7 +220,6 @@ path_params:
 
 
 # --- TODO ---:
-# Finish email builder helper
 # Clean up where possible (extractor and loader)
     # Factor out data_format checks from each load and extract method by adding a second item to each key
     # in method map that specifies which data_format it accepts

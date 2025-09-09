@@ -1,11 +1,6 @@
 from io import BytesIO
-from datetime import datetime   
-from email.message import Message
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.application import MIMEApplication 
+from email.message import EmailMessage
 from pandas import DataFrame
-from app.utils.models import StreamData
 
 
 def df_to_csv_buffer(
@@ -17,27 +12,22 @@ def df_to_csv_buffer(
     return bytes_buffer
 
 
-def build_email_msg(subject: str, body: str, date: str = datetime.now(), attachments: list[StreamData] = None) -> Message:
-    """Build an MIMEMultipart email message object from arguments. Will attempt to convert any attachments to bytes buffers
-    and use the associated filename in the StreamData object."""
-    file_buffers = {}
-    for attachment in attachments:
-        if data_item.data_format == "dataframe":
-            file_buffers[] = df_to_csv_buffer(data_item.content)
-        if data_item.data_format == "file_path":
-            with open(data_item.content) as file:
-                file_buffer = io.BytesIO(file)
-                file_buffer.seek(0)
-                data_item = file_buffer
-    msg = MIMEMultipart()
-    # msg["Date"] = formatdate(localtime=True)
-    # msg["Subject"] = subject
-    # msg.attach(MIMEText(text))
-    # attachments list
+def build_email_msg(
+    subject: str,
+    sender: str,
+    recipients: str | list[str],
+    body: str,
+    attachments: dict[str, BytesIO] = None,
+) -> EmailMessage:
+    """Build an email.EmailMessage object from arguments."""
+    msg = EmailMessage()
 
-    # for buffer in load_data:
-    #     attachment = MIMEApplication(buffer)
-    #     attachment["Content-Disposition"] = 'attachment; filename="file_name.csv"'
-    #     msg.attach(attachment)
-    
-    # Needs finishing...
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = recipients
+
+    msg.set_content(body)
+    for filename, file_buffer in attachments.items:
+        msg.add_attachment(file_buffer, filename=filename)
+
+    return msg

@@ -165,6 +165,7 @@ class Extractor:
 Extractor.protocol_to_method = {
     "sql": Extractor._sql_extract,
     "fileshare": Extractor._fileshare_extract,
+    "sftp": Extractor._sftp_extract,
     "google_drive": Extractor._drive_extract,
 }
 
