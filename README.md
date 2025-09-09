@@ -106,7 +106,6 @@ Configuration for an example data stream is given in the sample.config.yaml file
 
 
 # --- TODO ---:
-# clean up variable names in signatures across call stacks
 # implement dependency graph in config.py to ensure that every input required by a step corresponds to an output from a previous step
 # Put test jobs in for each extract/load type
 # Write unit tests
